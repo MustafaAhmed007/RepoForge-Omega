@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 from .config import ForgeConfig
+from .diagnostics import DiagnosticFinding
 from .engine import RepoForge
 from .memory import MemoryStore
 from .patching import FilePatch, SafePatcher
@@ -25,12 +27,12 @@ class AutopilotResult:
     iterations: int = 1
 
 
-def _model_patches(repo, findings) -> list[FilePatch]:
+def _model_patches(repo: Path, findings: list[DiagnosticFinding]) -> list[FilePatch]:
     provider = provider_from_environment()
     if getattr(provider, "name", "disabled") == "disabled":
         return []
     relevant: dict[str, str] = {}
-    for finding in findings:
+    for _finding in findings:
         for candidate in ("pyproject.toml", "package.json", "main.py", "src/index.ts", "src/index.js"):
             path = repo / candidate
             if path.exists() and candidate not in relevant:
@@ -40,7 +42,7 @@ def _model_patches(repo, findings) -> list[FilePatch]:
     response = provider.complete(ModelRequest(
         system="Return ONLY JSON with a patches array. Each patch must contain path, expected, replacement. Never use destructive commands or secrets.",
         prompt="Generate minimal patches for the supplied findings. Do not invent missing evidence.",
-        context=json.dumps({"findings": [f.__dict__ if hasattr(f, "__dict__") else {"code": f.code, "severity": f.severity, "message": f.message, "evidence": f.evidence} for f in findings], "files": relevant}),
+        context=json.dumps({"findings": [{"code": f.code, "severity": f.severity, "message": f.message, "evidence": f.evidence} for f in findings], "files": relevant}),
     ))
     data = json.loads(response.text)
     return [FilePatch(str(p["path"]), str(p["expected"]), str(p["replacement"])) for p in data.get("patches", [])]
