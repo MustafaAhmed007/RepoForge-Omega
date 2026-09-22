@@ -55,6 +55,225 @@ You point it at a project. RepoForge first learns what the project is, then choo
         READY REPORT       EVIDENCE + NEXT ACTION
 ```
 
+## Complete system workflow
+
+RepoForge is designed as a closed engineering loop rather than a single AI coding command.
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│                         REPOSITORY INPUT                             │
+│                 local repo / checked-out project                     │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ 1. DISCOVERY                                                         │
+│                                                                      │
+│ Scan repository boundaries, files, Git state, configuration,         │
+│ languages, frameworks, package managers, build systems, tests,      │
+│ entry points, environment indicators and deployment signals.        │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ 2. FINGERPRINTING                                                    │
+│                                                                      │
+│ Convert discovery results into a technology/project fingerprint.    │
+│ This determines which diagnostics and verification checks make       │
+│ sense for this particular repository.                                │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ 3. DIAGNOSTICS                                                       │
+│                                                                      │
+│ Run relevant deterministic checks: linting, type checking, tests,   │
+│ compilation, builds, repository diagnostics, secret checks and      │
+│ other supported health checks.                                      │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ 4. EVIDENCE + MEMORY                                                 │
+│                                                                      │
+│ Store structured findings, command results, observations and run     │
+│ events so reports and future decisions are traceable.                │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ 5. ROOT-CAUSE / REPAIR PLANNING                                      │
+│                                                                      │
+│ Turn findings into bounded repair candidates. Each candidate should  │
+│ identify its target, expected precondition, intended replacement,    │
+│ rationale and verification requirement.                              │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                                 ▼
+                    ┌──────────────────────────┐
+                    │ SAFE TO MODIFY?          │
+                    └────────────┬─────────────┘
+                                 │
+                         YES     │     NO
+                         ▼        │      ▼
+              ┌────────────────┐  │  BLOCK / REPORT
+              │ 6. TRANSACTION │  │
+              │AL REPAIR       │  │
+              └───────┬────────┘  │
+                      │           │
+                      ▼           │
+              exact precondition │
+              + repository bound │
+              + controlled patch │
+                      │           │
+                      ▼           │
+              ┌────────────────┐  │
+              │ 7. REGRESSION  │  │
+              │    VERIFY      │  │
+              └───────┬────────┘  │
+                      │           │
+                 PASS │ FAIL      │
+                      │   │       │
+                      │   └───────┼──► ROLLBACK
+                      ▼           │
+              ┌────────────────┐  │
+              │ 8. SECURITY    │  │
+              │    GATE        │  │
+              └───────┬────────┘  │
+                      │           │
+                      ▼           │
+              ┌────────────────┐  │
+              │ 9. READINESS   │  │
+              │    ASSESSMENT  │  │
+              └───────┬────────┘  │
+                      │           │
+                      ▼           │
+              ┌────────────────┐  │
+              │ 10. RELEASE    │  │
+              │     GATE       │  │
+              └───────┬────────┘  │
+                      │           │
+             ┌────────┼───────────┘
+             ▼        ▼
+         VERIFIED   NOT VERIFIED / BLOCKED
+             │        │
+             └────┬───┘
+                  ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ 11. REPORT + NEXT ACTION                                             │
+│                                                                      │
+│ Produce human-readable and machine-readable results showing what     │
+│ was inspected, what changed, what passed, what failed and what      │
+│ remains uncertain.                                                   │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### The simple version
+
+```text
+UNDERSTAND → FIND → EXPLAIN → PLAN → FIX → TEST → PROVE → REPORT
+```
+
+And when a repair makes things worse:
+
+```text
+FIX → TEST FAILS → ROLLBACK → KEEP EVIDENCE → TRY A SAFER PATH
+```
+
+This is what makes RepoForge an **engineering loop**, not simply an AI code generator.
+
+## Repository structure
+
+The repository is intentionally modular. Each major responsibility has a focused module so that scanners, repair strategies, model providers, verification logic and reporting can evolve independently.
+
+```text
+RepoForge-Omega/
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # Continuous integration and release checks
+│
+├── examples/
+│   └── sample_project/
+│       ├── main.py                 # Small target repository for E2E testing
+│       └── pyproject.toml          # Sample project metadata
+│
+├── repoforge/
+│   ├── __init__.py                 # Package identity/version
+│   ├── __main__.py                 # python -m repoforge entry point
+│   ├── autopilot.py                # Autonomous inspection/repair orchestration
+│   ├── bootstrap.py                # Target-repository bootstrap helpers
+│   ├── cli.py                      # User-facing command-line interface
+│   ├── config.py                   # Runtime/configuration handling
+│   ├── deploy.py                   # Deployment-readiness planning
+│   ├── diagnostics.py              # Evidence collection and diagnostics
+│   ├── engine.py                   # Core repository engineering engine
+│   ├── fingerprint.py              # Technology/project fingerprinting
+│   ├── memory.py                   # Persistent evidence/event memory
+│   ├── models.py                   # Shared domain models
+│   ├── patching.py                 # Controlled patch application
+│   ├── pipeline.py                 # End-to-end pipeline coordination
+│   ├── policy.py                   # Safety and execution policies
+│   ├── providers.py                # Optional model/provider adapters
+│   ├── readiness.py                # Deployment/release readiness checks
+│   ├── repair.py                   # Repair planning and repair logic
+│   ├── report.py                   # Human/machine-readable reporting
+│   ├── runner.py                   # Controlled subprocess execution
+│   ├── secrets.py                  # Secret detection
+│   ├── security.py                 # Command/security controls
+│   └── transaction.py              # Transaction + rollback mechanics
+│
+├── tests/
+│   ├── test_autopilot.py           # Autopilot regression coverage
+│   ├── test_deploy.py              # Deployment-readiness tests
+│   ├── test_diagnostics.py         # Diagnostic tests
+│   ├── test_engine.py              # Core engine tests
+│   ├── test_fingerprint.py         # Fingerprinting tests
+│   ├── test_memory.py              # Evidence-memory tests
+│   ├── test_patching.py            # Patch safety tests
+│   ├── test_pipeline.py            # Pipeline integration tests
+│   ├── test_readiness.py           # Readiness tests
+│   ├── test_repair.py              # Repair tests
+│   ├── test_report.py              # Reporting tests
+│   ├── test_runner.py              # Execution tests
+│   ├── test_secrets.py             # Secret scanner tests
+│   ├── test_security.py            # Security policy tests
+│   └── test_transaction.py         # Rollback/transaction tests
+│
+├── install.sh                      # Linux/macOS installer
+├── install.ps1                     # Windows PowerShell installer
+├── pyproject.toml                  # Python packaging and tool configuration
+├── AGENTS.md                       # Repository engineering contract
+├── LICENSE                          # Apache License 2.0
+├── README.md                       # Project documentation
+└── .gitignore                      # Repository hygiene rules
+```
+
+### Module responsibilities at a glance
+
+| Module | Responsibility |
+|---|---|
+| `cli.py` | Human-facing commands and entry points |
+| `engine.py` | Core repository engineering coordination |
+| `pipeline.py` | Connects the major lifecycle stages |
+| `fingerprint.py` | Learns what technology the repository uses |
+| `diagnostics.py` | Finds evidence of problems and risks |
+| `repair.py` | Creates and evaluates repair candidates |
+| `patching.py` | Applies bounded, preconditioned changes |
+| `transaction.py` | Makes repair operations reversible |
+| `autopilot.py` | Coordinates autonomous execution |
+| `providers.py` | Optional AI/model assistance |
+| `runner.py` | Executes approved deterministic commands |
+| `security.py` | Blocks unsafe command patterns |
+| `secrets.py` | Detects likely secret material |
+| `memory.py` | Preserves structured run evidence |
+| `report.py` | Generates audit-friendly results |
+| `readiness.py` | Assesses release/deployment readiness |
+| `deploy.py` | Produces deployment plans |
+| `policy.py` | Controls what RepoForge is allowed to do |
+| `config.py` | Loads runtime configuration |
+| `bootstrap.py` | Installs/initializes RepoForge in target repositories |
+
 ## Design contract
 
 RepoForge never treats an AI answer as proof that software is correct. `VERIFIED` requires deterministic evidence. Unknown or unsupported conditions remain `BLOCKED` or `NOT VERIFIED`.
