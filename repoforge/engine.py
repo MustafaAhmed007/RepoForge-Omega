@@ -2,12 +2,12 @@ from __future__ import annotations
 import json,uuid
 from pathlib import Path
 from .fingerprint import detect
-from .models import CheckResult,GateStatus,ReleaseStatus,VerificationReport
+from .models import CheckResult,GateStatus,ReleaseStatus,VerificationReport,RepositoryFingerprint
 from .runner import run_check
 
 class RepoForge:
     def __init__(self,repo:Path)->None: self.repo=repo.resolve()
-    def fingerprint(self): return detect(self.repo)
+    def fingerprint(self)->RepositoryFingerprint: return detect(self.repo)
     def discover_checks(self)->list[tuple[str,list[str]]]:
         fp=self.fingerprint(); checks:list[tuple[str,list[str]]]=[]
         if 'Python' in fp.languages:
@@ -28,6 +28,6 @@ class RepoForge:
         if not checks: checks=[CheckResult('verification',GateStatus.BLOCKED,None,0,reason='no deterministic verification commands discovered')]
         blockers=[c.name for c in checks if c.status in {GateStatus.FAIL,GateStatus.BLOCKED}]
         status=ReleaseStatus.BLOCKED if any(c.status==GateStatus.BLOCKED for c in checks) else ReleaseStatus.NOT_VERIFIED if blockers else ReleaseStatus.VERIFIED
-        rec=[]
+        rec:list[str]=[]
         if not fp.test_systems: rec.append('Add deterministic tests appropriate to the detected application.')
         return VerificationReport(fp,checks,status,blockers,rec,uuid.uuid4().hex)
