@@ -36,7 +36,7 @@ def main() -> None:
         fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(Path(a.out))
         print(json.dumps({"fingerprint": fp.to_dict(), "findings": [asdict(x) for x in findings], "proposals": [asdict(x) for x in proposals]}, indent=2)); return
     if a.command == "secrets":
-        findings = scan_secrets(repo); print(json.dumps([asdict(f) for f in findings], indent=2)); raise SystemExit(1 if findings else 0)
+        secret_findings = scan_secrets(repo); print(json.dumps([asdict(f) for f in secret_findings], indent=2)); raise SystemExit(1 if secret_findings else 0)
     if a.command == "deploy-plan":
         verification = RepoForge(repo).verify(a.timeout)
         print(json.dumps(asdict(deployment_plan(repo, verification)), indent=2)); raise SystemExit(0 if verification.release_status.value == "VERIFIED" else 1)
@@ -46,5 +46,4 @@ def main() -> None:
     if a.command != "scan" and data["release_status"] != "VERIFIED": raise SystemExit(1)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
