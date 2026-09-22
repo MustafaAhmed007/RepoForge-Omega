@@ -1,5 +1,5 @@
-$ErrorActionPreference = 'Stop'
 param([string]$Target='.')
+$ErrorActionPreference = 'Stop'
 $Target = (Resolve-Path $Target).Path
 $Source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Venv = Join-Path $Target '.repoforge-venv'
