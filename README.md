@@ -1,20 +1,20 @@
 # RepoForge-Omega
 
-RepoForge-Omega is a repository-agnostic engineering agent foundation for discovering project structure, collecting evidence, diagnosing common engineering risks, planning repairs, running deterministic verification, and producing auditable reports.
+RepoForge-Omega is a repository-agnostic engineering agent for discovering project structure, collecting evidence, diagnosing engineering risks, planning repairs, applying safe transactional patches, running deterministic verification, producing auditable reports, and assessing deployment readiness.
 
 ## Design contract
 
-RepoForge does not claim that an AI answer makes software correct. A release becomes `VERIFIED` only when configured deterministic checks pass. Unknown or unsupported conditions remain `BLOCKED` or `NOT VERIFIED`.
+RepoForge never treats an AI answer as proof that software is correct. `VERIFIED` requires deterministic evidence. Unknown or unsupported conditions remain `BLOCKED` or `NOT VERIFIED`.
 
-### Pipeline
+## Pipeline
 
-`DISCOVER -> FINGERPRINT -> DIAGNOSE -> PLAN -> REPAIR -> REGRESSION -> VERIFY -> REPORT`
+`DISCOVER -> FINGERPRINT -> DIAGNOSE -> PLAN -> REPAIR -> REGRESSION -> VERIFY -> READINESS -> REPORT`
 
-The current release implements discovery, fingerprinting, deterministic verification, command safety, diagnostics, repair planning, reporting, and cross-platform bootstrap scripts. Mutation-capable repair adapters are intentionally isolated behind explicit approval boundaries.
+The implementation includes repository fingerprinting, diagnostics, secret scanning, safe command execution, deterministic verification, repair planning, transactional rollback, optional OpenAI-compatible model assistance, persistent event memory, deployment planning, reports, CI, package builds, and cross-platform bootstrap scripts.
 
-## Install
+## Install into a target repository
 
-From a clone of this repository:
+Clone RepoForge and run the installer against the target repository.
 
 ### Linux/macOS
 
@@ -30,38 +30,55 @@ bash install.sh /path/to/target-repository
 C:\path\to\target-repository\.repoforge-venv\Scripts\repoforge.exe inspect C:\path\to\target-repository
 ```
 
+The installer creates an isolated `.repoforge-venv` and does not replace the target project's runtime.
+
 ## CLI
 
 ```bash
 repoforge scan .
+repoforge inspect .
 repoforge verify .
 repoforge doctor .
-repoforge inspect . --out .repoforge
+repoforge secrets .
+repoforge autopilot .              # dry-run by default
+repoforge autopilot . --apply     # apply gated deterministic/model patches
+repoforge deploy-plan .
 ```
 
-`inspect` writes `.repoforge/report.json` and `.repoforge/report.md`.
+`inspect` writes `.repoforge/report.json`, `.repoforge/report.md`, and an append-only `.repoforge/events.jsonl` evidence trail.
+
+## Optional model assistance
+
+RepoForge remains fully usable without a model. To enable an OpenAI-compatible repair planner:
+
+```text
+REPOFORGE_PROVIDER=openai
+REPOFORGE_API_KEY=<secret>
+REPOFORGE_ENDPOINT=https://api.openai.com/v1
+REPOFORGE_MODEL=<approved-model>
+```
+
+Model-generated patches are constrained to exact `expected -> replacement` file patches and must still pass deterministic verification. A failed verification causes transactional rollback.
 
 ## Safety model
 
 - subprocess execution uses `shell=False`
 - destructive commands are blocked by default
-- network/package mutation is approval-gated
+- network/package mutation is not silently performed by the verifier
 - repository contents are treated as untrusted input
-- diagnostics are evidence-producing, not proof of correctness
-- repair planning is separate from repair execution
+- patch paths cannot escape the target repository
+- patches use exact preconditions
+- failed repairs roll back when possible
+- secrets are scanned separately
+- deterministic verification is the release authority
 
-## Roadmap
+## Verification
 
-1. Universal discovery and fingerprinting
-2. Diagnostic and verification adapters
-3. Sandboxed repair execution with rollback
-4. Model/provider adapters
-5. Security and dependency intelligence
-6. E2E/browser verification adapters
-7. Deployment-readiness gates
-8. Persistent learning and regression corpus
-9. Cross-platform installer and CI bootstrap
-10. Adversarial end-to-end verification
+GitHub Actions validates Python 3.10, 3.11, and 3.12 with linting, type checking, tests, compilation, and package building. The repository also contains a sample project and regression tests for discovery, diagnostics, repair, rollback, memory, readiness, secrets, and end-to-end execution.
+
+## Limitations
+
+No tool can truthfully guarantee that arbitrary software is permanently bug-free. RepoForge therefore reports evidence-backed states rather than inventing certainty. Browser-specific, proprietary infrastructure, credentials, production deployment, and unsupported language ecosystems require an appropriate adapter and environment.
 
 ## Development
 
@@ -70,8 +87,9 @@ python -m pip install -e ".[dev]"
 ruff check .
 mypy repoforge
 pytest
+python -m build
 ```
 
 ## Commercialization
 
-The core can remain open source while paid layers provide managed repository scans, private runners, team policies, deployment integrations, audit history, and organization-level governance.
+The core can remain open source while paid layers provide managed repository scans, private runners, organization policies, deployment integrations, audit history, compliance evidence, and team-level governance.
