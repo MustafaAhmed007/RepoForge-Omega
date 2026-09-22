@@ -75,13 +75,13 @@ class Autopilot:
                     transaction.commit()
             except Exception:
                 transaction.rollback(); rolled_back = True
-        else:
-            patched = SafePatcher(self.config.repo).apply(candidate_patches, dry_run=True)
+        elif candidate_patches:
+            SafePatcher(self.config.repo).apply(candidate_patches, dry_run=True)
 
         verification = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
         readiness = assess(self.config.repo)
         MemoryStore(self.config.repo / ".repoforge" / "events.jsonl").append(
             "autopilot", verification.release_status.value,
-            f"{len(findings)} findings", f"{len(patched)} patches; rollback={rolled_back}",
+            f"{len(findings)} findings", f"{len(patched)} patches applied; rollback={rolled_back}",
         )
         return AutopilotResult(len(findings), len(proposals), patched, verification.release_status.value, readiness, rolled_back, 1)
