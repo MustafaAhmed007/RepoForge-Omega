@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from .config import ForgeConfig
 from .diagnostics import DiagnosticEngine,DiagnosticFinding
-from .fingerprint import RepositoryFingerprint
+from .models import RepositoryFingerprint
 from .repair import RepairPlanner,RepairProposal
 from .report import write_json,write_markdown
 
