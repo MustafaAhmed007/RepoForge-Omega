@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 @dataclass(slots=True)
 class ForgeConfig:
@@ -11,4 +12,5 @@ class ForgeConfig:
 
     @classmethod
     def for_repo(cls, repo: Path, **kwargs: object) -> 'ForgeConfig':
-        return cls(repo=repo.resolve(), **kwargs)
+        options: dict[str, Any] = dict(kwargs)
+        return cls(repo=repo.resolve(), **cast(Any, options))
