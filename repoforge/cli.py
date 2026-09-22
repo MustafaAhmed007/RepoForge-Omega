@@ -23,7 +23,9 @@ def main()->None:
         fp,findings,proposals=Pipeline(ForgeConfig.for_repo(repo)).inspect(Path(a.out))
         print(json.dumps({'languages':fp.languages,'frameworks':fp.frameworks,'findings':[x.code for x in findings],'proposals':[x.action for x in proposals]},indent=2)); return
     if a.command=='secrets':
-        findings=scan_secrets(repo); print(json.dumps([asdict(f) for f in findings],indent=2)); raise SystemExit(1 if findings else 0)
+        secret_findings=scan_secrets(repo)
+        print(json.dumps([asdict(f) for f in secret_findings],indent=2))
+        raise SystemExit(1 if secret_findings else 0)
     forge=RepoForge(repo); data=forge.fingerprint().to_dict() if a.command=='scan' else forge.verify(a.timeout).to_dict()
     print(json.dumps(data,indent=2))
     if a.command!='scan' and data['release_status']!='VERIFIED': raise SystemExit(1)
