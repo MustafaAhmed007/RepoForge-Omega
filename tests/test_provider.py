@@ -1,5 +1,3 @@
-import os
-
 from repoforge.providers import DisabledProvider, provider_from_environment
 
 
