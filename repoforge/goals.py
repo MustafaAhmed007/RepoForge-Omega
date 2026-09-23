@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 
@@ -31,7 +32,13 @@ DEPLOYMENT_READY_GOAL = "make any given repository deployment-ready"
 
 
 def deployment_goal(repo: Path, max_iterations: int = 3) -> Goal:
-    return Goal(uuid.uuid4().hex, f"{DEPLOYMENT_READY_GOAL}: {repo.resolve()}", max_iterations=max_iterations)
+    if max_iterations < 1:
+        raise ValueError("max_iterations must be at least 1")
+    return Goal(
+        uuid.uuid4().hex,
+        f"{DEPLOYMENT_READY_GOAL}: {repo.resolve()}",
+        max_iterations=max_iterations,
+    )
 
 
 def build_deployment_task_graph() -> TaskGraph:
@@ -48,27 +55,50 @@ def build_deployment_task_graph() -> TaskGraph:
 
 
 class GoalRunner:
-    """Goal state machine. It never upgrades a goal to VERIFIED by model opinion."""
+    """Bounded goal state machine with a durable JSON snapshot per run."""
 
     def __init__(self, repo: Path, max_iterations: int = 3) -> None:
         self.repo = repo.resolve()
         self.goal = deployment_goal(self.repo, max_iterations)
         self.graph = build_deployment_task_graph()
+        self.state_path = self.repo / ".repoforge" / "goal.json"
 
     def start(self) -> Goal:
         self.goal.status = GoalStatus.RUNNING
+        self.persist()
         return self.goal
 
-    def record_task(self, task_id: str, status: TaskStatus, evidence: list[str] | None = None) -> None:
+    def record_task(
+        self, task_id: str, status: TaskStatus, evidence: list[str] | None = None
+    ) -> None:
         self.graph.mark(task_id, status, evidence or [])
+        self.persist()
 
     def finalize(self, deterministic_verified: bool, blockers: list[str]) -> Goal:
         self.goal.iteration += 1
         self.goal.evidence.extend(blockers)
-        if deterministic_verified and not blockers:
+        if deterministic_verified and not blockers and self.graph.successful():
             self.goal.status = GoalStatus.VERIFIED
         elif self.goal.iteration >= self.goal.max_iterations:
             self.goal.status = GoalStatus.BLOCKED
         else:
             self.goal.status = GoalStatus.FAILED
+        self.persist()
         return self.goal
+
+    def persist(self) -> None:
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "goal": asdict(self.goal),
+            "tasks": {
+                task_id: {
+                    "title": task.title,
+                    "role": task.role,
+                    "depends_on": task.depends_on,
+                    "status": task.status.value,
+                    "evidence": task.evidence,
+                }
+                for task_id, task in self.graph.tasks.items()
+            },
+        }
+        self.state_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
