@@ -40,14 +40,14 @@ def main() -> None:
     if a.command == "init":
         print(bootstrap(repo)); return
     if a.command == "autopilot":
-        result = Autopilot(ForgeConfig.for_repo(repo, timeout_seconds=a.timeout, dry_run=not a.apply)).run()
+        autopilot_result = Autopilot(ForgeConfig.for_repo(repo, timeout_seconds=a.timeout, dry_run=not a.apply)).run()
         print(json.dumps({
-            "findings": result.findings,
-            "proposals": result.proposals,
-            "patched": result.patched,
-            "verification_status": result.verification_status,
-            "readiness": asdict(result.readiness),
-            "rolled_back": result.rolled_back,
+            "findings": autopilot_result.findings,
+            "proposals": autopilot_result.proposals,
+            "patched": autopilot_result.patched,
+            "verification_status": autopilot_result.verification_status,
+            "readiness": asdict(autopilot_result.readiness),
+            "rolled_back": autopilot_result.rolled_back,
         }, indent=2))
         return
     if a.command == "goal":
@@ -57,19 +57,19 @@ def main() -> None:
             dry_run=not a.apply,
             max_goal_iterations=a.max_iterations,
         )
-        result = Orchestrator(config).run()
+        goal_result = Orchestrator(config).run()
         print(json.dumps({
             "goal": "make any given repository deployment-ready",
-            "goal_id": result.goal_id,
-            "goal_status": result.goal_status,
-            "verification_status": result.verification_status,
-            "readiness": asdict(result.readiness),
-            "iterations": result.iterations,
-            "patched": result.patched,
-            "blockers": result.blockers,
+            "goal_id": goal_result.goal_id,
+            "goal_status": goal_result.goal_status,
+            "verification_status": goal_result.verification_status,
+            "readiness": asdict(goal_result.readiness),
+            "iterations": goal_result.iterations,
+            "patched": goal_result.patched,
+            "blockers": goal_result.blockers,
             "goal_state": str(repo / ".repoforge" / "goal.json"),
         }, indent=2))
-        raise SystemExit(0 if result.goal_status == "VERIFIED" else 1)
+        raise SystemExit(0 if goal_result.goal_status == "VERIFIED" else 1)
     if a.command == "inspect":
         fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(Path(a.out))
         print(json.dumps({
