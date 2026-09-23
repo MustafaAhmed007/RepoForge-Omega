@@ -37,7 +37,7 @@ class Orchestrator:
         self.hooks.emit("session_start", goal=goal.goal.id, repo=str(self.config.repo))
 
         _, findings, proposals = Pipeline(self.config).inspect()
-        goal.record_task("discover", TaskStatus.PASSED, [f"repository fingerprint collected"])
+        goal.record_task("discover", TaskStatus.PASSED, ["repository fingerprint collected"])
         goal.record_task("diagnose", TaskStatus.PASSED, [f"{len(findings)} findings collected"])
         self.hooks.emit("after_task", task="diagnose", findings=len(findings))
 
