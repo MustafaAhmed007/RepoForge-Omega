@@ -478,3 +478,95 @@ Apache-2.0 was selected because it permits commercial and private use, modificat
 ---
 
 **RepoForge-Omega principle:** inspect first, change carefully, verify with evidence, and never confuse AI confidence with software correctness.
+
+
+## Autonomous engineering control plane
+
+RepoForge now includes a unified control-plane layer around the existing deterministic engineering core. The objective is explicit:
+
+> **make any given repository deployment-ready**
+
+The control plane coordinates specialized roles, bounded task graphs, durable goal state, lifecycle hooks, permission policy, model routing, protocol endpoints, optional browser capabilities, and the existing repair/verification machinery.
+
+```text
+GOAL
+  │
+  ▼
+REPOSITORY MAP
+  │
+  ▼
+TASK GRAPH
+  │
+  ├── discovery
+  ├── diagnosis
+  ├── planning
+  ├── repair
+  ├── verification
+  ├── review
+  ├── security
+  └── release readiness
+          │
+          ▼
+   DETERMINISTIC GATES
+          │
+     ┌────┴────┐
+     ▼         ▼
+ VERIFIED   FAILED/BLOCKED
+               │
+               ▼
+          evidence + rollback
+               │
+               └──► next bounded iteration
+```
+
+### Control-plane components
+
+| Component | Responsibility |
+|---|---|
+| `agents.py` | Specialized engineering roles and execution boundaries |
+| `tasks.py` | Dependency-aware task graph and task state |
+| `goals.py` | Bounded autonomous goal lifecycle |
+| `hooks.py` | Lifecycle events for observability and extensions |
+| `permissions.py` | Explicit write, network, install and browser policy |
+| `router.py` | Vendor-neutral model/provider selection |
+| `integrations.py` | Extension registry for external capabilities |
+| `protocols.py` | Protocol endpoint registry for future adapters |
+| `browser.py` | Permission-gated browser automation interface |
+| `orchestrator.py` | Unified control-plane coordination |
+
+These are independently implemented RepoForge capabilities. The architecture is intentionally vendor-neutral and does not require any particular external agent, provider, editor, protocol server, or model runtime.
+
+### Deployment-readiness goal
+
+Run the autonomous goal in dry-run mode first:
+
+```bash
+repoforge goal /path/to/repository
+```
+
+When repository writes are explicitly authorized:
+
+```bash
+repoforge goal /path/to/repository --apply
+```
+
+The goal is bounded by `--max-iterations` and cannot promote a repository to `VERIFIED` from model confidence alone. The existing deterministic verification authority remains the final gate.
+
+### Trust boundary
+
+```text
+AI / agents / models
+        │
+        │ propose, reason, coordinate
+        ▼
+RepoForge control plane
+        │
+        │ bounded changes
+        ▼
+Deterministic verification
+        │
+        ├── PASS ──► release evidence
+        └── FAIL ──► rollback / blocked state
+```
+
+Autonomy expands what RepoForge can do; it does **not** weaken the evidence standard for `VERIFIED`.
