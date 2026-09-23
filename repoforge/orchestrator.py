@@ -8,7 +8,7 @@ from .goals import GoalRunner
 from .hooks import HookBus
 from .models import ReleaseStatus
 from .pipeline import Pipeline
-from .readiness import assess
+from .readiness import Readiness, assess
 from .secrets import scan as scan_secrets
 from .tasks import TaskStatus
 
@@ -18,7 +18,7 @@ class OrchestrationResult:
     goal_id: str
     goal_status: str
     verification_status: str
-    readiness: object
+    readiness: Readiness
     iterations: int
     patched: list[str]
     blockers: list[str]
