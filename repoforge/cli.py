@@ -41,21 +41,50 @@ def main() -> None:
         print(bootstrap(repo)); return
     if a.command == "autopilot":
         result = Autopilot(ForgeConfig.for_repo(repo, timeout_seconds=a.timeout, dry_run=not a.apply)).run()
-        print(json.dumps({"findings": result.findings, "proposals": result.proposals, "patched": result.patched, "verification_status": result.verification_status, "readiness": asdict(result.readiness), "rolled_back": result.rolled_back}, indent=2))
+        print(json.dumps({
+            "findings": result.findings,
+            "proposals": result.proposals,
+            "patched": result.patched,
+            "verification_status": result.verification_status,
+            "readiness": asdict(result.readiness),
+            "rolled_back": result.rolled_back,
+        }, indent=2))
         return
     if a.command == "goal":
-        config = ForgeConfig.for_repo(repo, timeout_seconds=a.timeout, dry_run=not a.apply, max_goal_iterations=a.max_iterations)
+        config = ForgeConfig.for_repo(
+            repo,
+            timeout_seconds=a.timeout,
+            dry_run=not a.apply,
+            max_goal_iterations=a.max_iterations,
+        )
         result = Orchestrator(config).run()
-        print(json.dumps({"goal": "make any given repository deployment-ready", "goal_id": result.goal_id, "goal_status": result.goal_status, "verification_status": result.verification_status, "readiness": asdict(result.readiness), "iterations": result.iterations, "patched": result.patched}, indent=2))
+        print(json.dumps({
+            "goal": "make any given repository deployment-ready",
+            "goal_id": result.goal_id,
+            "goal_status": result.goal_status,
+            "verification_status": result.verification_status,
+            "readiness": asdict(result.readiness),
+            "iterations": result.iterations,
+            "patched": result.patched,
+            "blockers": result.blockers,
+            "goal_state": str(repo / ".repoforge" / "goal.json"),
+        }, indent=2))
         raise SystemExit(0 if result.goal_status == "VERIFIED" else 1)
     if a.command == "inspect":
         fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(Path(a.out))
-        print(json.dumps({"fingerprint": fp.to_dict(), "findings": [asdict(x) for x in findings], "proposals": [asdict(x) for x in proposals]}, indent=2)); return
+        print(json.dumps({
+            "fingerprint": fp.to_dict(),
+            "findings": [asdict(x) for x in findings],
+            "proposals": [asdict(x) for x in proposals],
+        }, indent=2)); return
     if a.command == "secrets":
-        secret_findings = scan_secrets(repo); print(json.dumps([asdict(f) for f in secret_findings], indent=2)); raise SystemExit(1 if secret_findings else 0)
+        secret_findings = scan_secrets(repo)
+        print(json.dumps([asdict(f) for f in secret_findings], indent=2))
+        raise SystemExit(1 if secret_findings else 0)
     if a.command == "deploy-plan":
         verification = RepoForge(repo).verify(a.timeout)
-        print(json.dumps(asdict(deployment_plan(repo, verification)), indent=2)); raise SystemExit(0 if verification.release_status.value == "VERIFIED" else 1)
+        print(json.dumps(asdict(deployment_plan(repo, verification)), indent=2))
+        raise SystemExit(0 if verification.release_status.value == "VERIFIED" else 1)
     forge = RepoForge(repo)
     data = forge.fingerprint().to_dict() if a.command == "scan" else forge.verify(a.timeout).to_dict()
     print(json.dumps(data, indent=2))
