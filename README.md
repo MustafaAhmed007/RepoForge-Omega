@@ -221,7 +221,17 @@ RepoForge-Omega/
 │   ├── runner.py                   # Controlled subprocess execution
 │   ├── secrets.py                  # Secret detection
 │   ├── security.py                 # Command/security controls
-│   └── transaction.py              # Transaction + rollback mechanics
+│   ├── transaction.py              # Transaction + rollback mechanics
+│   ├── agents.py                   # Specialized agent roles/runtime boundary
+│   ├── tasks.py                    # Dependency-aware task graph
+│   ├── goals.py                    # Bounded goal lifecycle + durable state snapshot
+│   ├── hooks.py                    # Lifecycle event bus
+│   ├── permissions.py              # Explicit capability/permission gates
+│   ├── integrations.py             # Vendor-neutral integration registry
+│   ├── protocols.py                # Protocol endpoint registry
+│   ├── browser.py                  # Permission-gated browser adapter boundary
+│   ├── router.py                   # Provider locality/preference routing
+│   └── orchestrator.py             # Unified control-plane execution
 │
 ├── tests/
 │   ├── test_autopilot.py           # Autopilot regression coverage
@@ -418,19 +428,25 @@ GitHub Actions validates Python 3.10, 3.11, and 3.12 with linting, type checking
 CLI
  │
  ▼
-Orchestrator
+CONTROL PLANE
+ ├── Goal + Task Graph
+ ├── Agent Role Boundaries
+ ├── Hooks + Permissions
+ ├── Model Router
+ └── Integrations / Protocol / Browser Adapters
+ │
+ ▼
+ENGINEERING CORE
  ├── Discovery / Fingerprinting
- ├── Diagnostics
- ├── Repair Planning
+ ├── Diagnostics / Repair Planning
  ├── Transactional Repair
- ├── Verification
+ ├── Deterministic Verification
  ├── Security / Secret Scan
  ├── Deployment Readiness
- ├── Evidence / Memory
- └── Provider Adapters
-        │
-        ├── Deterministic tools
-        └── Optional model assistance
+ └── Evidence / Memory / Reports
+ │
+ ├── Deterministic tools
+ └── Optional model assistance
 ```
 
 The core is intentionally modular: detection, execution, repair, verification, provider integration, and reporting can evolve independently.
