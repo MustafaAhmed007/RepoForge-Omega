@@ -24,6 +24,7 @@ class ModelResponse:
 class ModelProvider(Protocol):
     name: str
     model: str
+    kind: str
 
     def complete(self, request: ModelRequest) -> ModelResponse: ...
 
@@ -31,6 +32,7 @@ class ModelProvider(Protocol):
 class DisabledProvider:
     name = "disabled"
     model = "none"
+    kind = "none"
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         raise RuntimeError("No model provider configured; deterministic verification remains available.")
@@ -40,6 +42,7 @@ class OpenAICompatibleProvider:
     """Optional OpenAI-compatible adapter; never required for deterministic operation."""
 
     name = "openai-compatible"
+    kind = "remote"
 
     def __init__(self, endpoint: str, api_key: str, model: str, timeout: int = 90) -> None:
         self.endpoint, self.api_key, self.model, self.timeout = endpoint.rstrip("/"), api_key, model, timeout
