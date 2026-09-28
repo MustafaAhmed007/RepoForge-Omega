@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable
+from .patching import FilePatch
 from .config import ForgeConfig
 from .engine import RepoForge
 from .evidence import EvidenceBundle, EvidenceItem
@@ -27,7 +29,7 @@ class RepairLoopResult:
 
 
 class RepairLoop:
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig) -> None:
         self.config = config
 
     def run(self, patch_provider) -> RepairLoopResult:
