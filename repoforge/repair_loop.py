@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable\n\nfrom .models import VerificationReport
 from .patching import FilePatch
 from .config import ForgeConfig
 from .engine import RepoForge
@@ -32,7 +32,7 @@ class RepairLoop:
     def __init__(self, config: ForgeConfig) -> None:
         self.config = config
 
-    def run(self, patch_provider: Callable[[RootCauseAnalysis, object, EvidenceBundle], list[FilePatch]]) -> RepairLoopResult:
+    def run(\n        self,\n        patch_provider: Callable[[RootCauseAnalysis, VerificationReport, EvidenceBundle], list[FilePatch]],\n    ) -> RepairLoopResult:
         attempts: list[RepairAttempt] = []
         forge = RepoForge(self.config.repo)
 
