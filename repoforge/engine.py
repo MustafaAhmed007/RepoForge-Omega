@@ -24,8 +24,7 @@ class RepoForge:
         specs = discover_checks(self.repo)
         checks = []
         for spec in specs:
-            result = run_check(spec.name, spec.command, self.repo, timeout_s)
-            result.required = spec.required
+            result = run_check(spec.name, spec.command, self.repo, timeout_s, required=spec.required)
             checks.append(result)
 
         if not checks:
