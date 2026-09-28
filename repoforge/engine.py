@@ -21,7 +21,13 @@ class RepoForge:
 
     def verify(self, timeout_s: int = 120) -> VerificationReport:
         fp = self.fingerprint()
-        checks = [run_check(name, command, self.repo, timeout_s) for name, command in self.discover_checks()]
+        specs = discover_checks(self.repo)
+        checks = []
+        for spec in specs:
+            result = run_check(spec.name, spec.command, self.repo, timeout_s)
+            result.required = spec.required
+            checks.append(result)
+
         if not checks:
             checks = [
                 CheckResult(
@@ -32,18 +38,31 @@ class RepoForge:
                     reason="no deterministic verification commands discovered",
                 )
             ]
-        blockers = [c.name for c in checks if c.status in {GateStatus.FAIL, GateStatus.BLOCKED}]
-        if any(c.status == GateStatus.BLOCKED for c in checks):
+
+        blockers = [
+            c.name
+            for c in checks
+            if c.required and c.status in {GateStatus.FAIL, GateStatus.BLOCKED}
+        ]
+        if any(c.required and c.status == GateStatus.BLOCKED for c in checks):
             status = ReleaseStatus.BLOCKED
         elif blockers:
             status = ReleaseStatus.NOT_VERIFIED
         else:
             status = ReleaseStatus.VERIFIED
+
         recommendations: list[str] = []
         if not fp.test_systems:
             recommendations.append("Add deterministic tests appropriate to the detected application.")
         if fp.runtime.get("python_source") == "repoforge-runtime":
             recommendations.append(
                 "No target Python virtual environment was detected; verification used RepoForge's interpreter."
+            )
+        optional_blocked = [
+            c.name for c in checks if not c.required and c.status == GateStatus.BLOCKED
+        ]
+        if optional_blocked:
+            recommendations.append(
+                "Optional checks unavailable: " + ", ".join(optional_blocked)
             )
         return VerificationReport(fp, checks, status, blockers, recommendations, uuid.uuid4().hex)
