@@ -54,6 +54,7 @@ class RepairLoop:
                 if verification.release_status.value == "VERIFIED":
                     if not self._review_and_commit(transaction, verification, attempts):
                         transaction.rollback()
+                        self._mark_rolled_back(attempts, "Independent review rejected the candidate.")
                         return RepairLoopResult(False, attempts)
                     committed = True
                     return RepairLoopResult(True, attempts)
@@ -67,6 +68,10 @@ class RepairLoop:
                         RepairAttempt(number, [], "NO_PATCH", rca.confidence, False)
                     )
                     transaction.rollback()
+                    self._mark_rolled_back(
+                        attempts,
+                        "No bounded repair was available for the current verification state.",
+                    )
                     return RepairLoopResult(False, attempts, rca)
 
                 if self.config.dry_run:
@@ -98,14 +103,16 @@ class RepairLoop:
                 reason = "Repair budget exhausted; required verification checks still fail."
                 if final.blockers:
                     reason += " Blockers: " + ", ".join(final.blockers)
-                if attempts:
-                    attempts[-1].reason = reason
-                    attempts[-1].status = "ROLLED_BACK"
                 transaction.rollback()
+                self._mark_rolled_back(attempts, reason)
                 return RepairLoopResult(False, attempts, rca if "rca" in locals() else None)
 
             if not self._review_and_commit(transaction, final, attempts):
                 transaction.rollback()
+                self._mark_rolled_back(
+                    attempts,
+                    "Independent review rejected the candidate.",
+                )
                 return RepairLoopResult(False, attempts, rca if "rca" in locals() else None)
 
             committed = True
@@ -115,6 +122,7 @@ class RepairLoop:
             return RepairLoopResult(True, attempts, rca if "rca" in locals() else None)
         except Exception as exc:
             transaction.rollback()
+            self._mark_rolled_back(attempts, str(exc))
             if attempts:
                 attempts[-1].status = "ERROR"
                 attempts[-1].reason = str(exc)
@@ -122,6 +130,13 @@ class RepairLoop:
         finally:
             if not committed:
                 transaction.rollback()
+
+    @staticmethod
+    def _mark_rolled_back(attempts: list[RepairAttempt], reason: str) -> None:
+        for attempt in attempts:
+            if attempt.status == "APPLIED":
+                attempt.status = "ROLLED_BACK"
+                attempt.reason = reason
 
     def _review_and_commit(
         self,
