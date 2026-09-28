@@ -19,14 +19,14 @@ class RootCauseAnalysis:
     reproduction:list[str]=field(default_factory=list)
     missing_evidence:list[str]=field(default_factory=list)
     confidence:float=0.0
-    def primary(self):return max(self.hypotheses,key=lambda h:h.confidence,default=None)
+    def primary(self) -> Hypothesis | None:return max(self.hypotheses,key=lambda h:h.confidence,default=None)
 class RootCauseAnalysisEngine:
-    def __init__(self,repo:Path):self.repo=repo.resolve()
+    def __init__(self,repo:Path) -> None:self.repo=repo.resolve()
     def analyze(self, verification: VerificationReport, evidence: EvidenceBundle) -> RootCauseAnalysis:
         failures=[c for c in verification.checks if c.status.value in {"FAIL","BLOCKED"}]
         if not failures:return RootCauseAnalysis(evidence.run_id,"No failing deterministic checks.")
         check=failures[0]; output=(check.stdout+"\n"+check.stderr).strip()
-        affected=re.findall(r"(?m)([A-Za-z0-9_./\\-]+\.py):\d+",output); hs=[]
+        affected=re.findall(r"(?m)([A-Za-z0-9_./\\-]+\.py):\d+",output); hs: list[Hypothesis]=[]
         if "ModuleNotFoundError" in output or "ImportError" in output:hs.append(Hypothesis("The target runtime is missing a dependency.",["import/module error"],.95,"environment"))
         if re.search(r"AssertionError|assert .*? == .*",output,re.I):hs.append(Hypothesis("Implementation behavior differs from an explicit test contract.",["assertion failure"],.8,"behavior"))
         node=re.search(r"([A-Za-z0-9_./\\-]+\.py::[A-Za-z0-9_]+)",output)
