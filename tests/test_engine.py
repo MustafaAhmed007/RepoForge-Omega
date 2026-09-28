@@ -50,3 +50,17 @@ def test_optional_make_check_does_not_block_release(tmp_path: Path) -> None:
     make_checks = [check for check in report.checks if check.name == "make-test"]
     assert make_checks
     assert make_checks[0].required is False
+
+
+def test_optional_make_check_is_not_a_readiness_blocker(tmp_path: Path) -> None:
+    from repoforge.readiness import assess
+
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='sample'\n", encoding="utf-8"
+    )
+    (tmp_path / "tests").mkdir()
+    report = RepoForge(tmp_path).verify()
+    readiness = assess(tmp_path, report)
+
+    assert "make-test" not in readiness.blockers
+    assert "make-lint" not in readiness.blockers
