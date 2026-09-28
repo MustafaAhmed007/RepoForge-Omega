@@ -31,6 +31,7 @@ def main() -> None:
     command = sub.add_parser("inspect")
     command.add_argument("path", nargs="?", default=".")
     command.add_argument("--out", default=".repoforge")
+    command.add_argument("--timeout", type=int, default=120)
     command.add_argument(
         "--verify",
         action="store_true",
@@ -122,11 +123,7 @@ def main() -> None:
         raise SystemExit(0 if result.goal_status == "VERIFIED" else 1)
 
     if args.command == "inspect":
-        verification = (
-            RepoForge(repo).verify(120)
-            if args.verify
-            else None
-        )
+        verification = RepoForge(repo).verify(args.timeout) if args.verify else None
         fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(
             Path(args.out),
             verification=verification,
