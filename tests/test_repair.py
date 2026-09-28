@@ -113,3 +113,114 @@ def test_readiness_cannot_be_ready_when_verification_is_blocked(tmp_path: Path):
     assert readiness.ready is False
     assert "python-tests" in readiness.blockers
     assert "make-test" in readiness.blockers
+
+
+def _ruff_verification(tmp_path: Path, output: str) -> VerificationReport:
+    fingerprint = RepositoryFingerprint(
+        path=str(tmp_path),
+        languages=["Python"],
+        frameworks=[],
+        package_managers=["Python"],
+        build_systems=[],
+        test_systems=["pytest"],
+        deployment_targets=[],
+        entry_points=[],
+        environment_files=[],
+        git_branch="test",
+        git_commit="abc",
+        file_count=1,
+        total_bytes=10,
+    )
+    check = CheckResult(
+        "python-ruff",
+        GateStatus.FAIL,
+        1,
+        10,
+        stdout=output,
+    )
+    return VerificationReport(
+        fingerprint,
+        [check],
+        ReleaseStatus.NOT_VERIFIED,
+        ["python-ruff"],
+        [],
+        "ruff-run",
+    )
+
+
+def test_repair_planner_repairs_safe_ruff_findings(tmp_path: Path):
+    research = tmp_path / "adaptive_rag"
+    research.mkdir()
+    source = research / "research.py"
+    source.write_text(
+        "import re\n"
+        "def run():\n"
+        "    text = re.sub('x', 'y', 'x', flags=re.I)\n"
+        "    try:\n"
+        "        return 1\n"
+        "    except Exception as exc:\n"
+        "        warnings.append(str(exc))\n",
+        encoding="utf-8",
+    )
+    output = (
+        "FURB167 [*] Use of regular expression alias re.I\n"
+        "  --> adaptive_rag\\research.py:3:49\n"
+        "\n"
+        "BLE001 Do not catch blind exception: Exception\n"
+        "  --> adaptive_rag\\research.py:6:12\n"
+    )
+    verification = _ruff_verification(tmp_path, output)
+
+    patches = RepairPlanner(tmp_path).deterministic_patches(
+        RootCauseAnalysis("ruff-run", "python-ruff failed"),
+        verification,
+        [],
+    )
+
+    assert len(patches) == 1
+    assert "re.IGNORECASE" in patches[0].replacement
+    assert "# noqa: BLE001" in patches[0].replacement
+
+
+def test_repair_planner_repairs_simple_import_order(tmp_path: Path):
+    source = tmp_path / "base.py"
+    source.write_text(
+        "from __future__ import annotations\n"
+        "from abc import ABC\n"
+        "from collections import Counter\n"
+        "import re\n"
+        "\n"
+        "from ..models import Document\n",
+        encoding="utf-8",
+    )
+    output = (
+        "I001 [*] Import block is un-sorted or un-formatted\n"
+        " --> base.py:2:1\n"
+    )
+    verification = _ruff_verification(tmp_path, output)
+
+    patches = RepairPlanner(tmp_path).deterministic_patches(
+        RootCauseAnalysis("ruff-run", "python-ruff failed"),
+        verification,
+        [],
+    )
+
+    assert len(patches) == 1
+    assert patches[0].replacement.startswith(
+        "from __future__ import annotations\nimport re\nfrom abc import ABC\n"
+    )
+
+
+def test_rollback_marks_all_applied_attempts():
+    from repoforge.repair_loop import RepairAttempt, RepairLoop
+
+    attempts = [
+        RepairAttempt(1, ["planner.py"], "APPLIED", 0.9, False),
+        RepairAttempt(2, [], "NO_PATCH", 0.8, False),
+    ]
+
+    RepairLoop._mark_rolled_back(attempts, "rollback")
+
+    assert attempts[0].status == "ROLLED_BACK"
+    assert attempts[0].reason == "rollback"
+    assert attempts[1].status == "NO_PATCH"
