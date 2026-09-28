@@ -18,7 +18,7 @@ PATTERNS = (
     (
         "GENERIC_TOKEN",
         re.compile(
-            r"(?i)\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*["'][^"']{12,}["']"
+            r"""(?i)\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*["'][^"']{12,}["']"""
         ),
     ),
 )
