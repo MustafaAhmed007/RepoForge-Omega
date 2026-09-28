@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .config import ForgeConfig
 from .engine import RepoForge
-from .evidence import EvidenceBundle
+from .evidence import EvidenceBundle, EvidenceItem
 from .rca import RootCauseAnalysis, RootCauseAnalysisEngine
 from .reviewer import IndependentReviewer
 from .transaction import RepairTransaction
@@ -29,8 +29,6 @@ class RepairLoopResult:
 
 
 class RepairLoop:
-    """Bounded hypothesis -> patch -> verify -> independent-review loop."""
-
     def __init__(self, config: ForgeConfig):
         self.config = config
 
@@ -49,17 +47,18 @@ class RepairLoop:
 
             if not patches:
                 attempts.append(
-                    RepairAttempt(
-                        number, [], "NO_PATCH", rca.confidence, False,
-                        "No bounded patch candidate was produced.",
-                    )
+                    RepairAttempt(number, [], "NO_PATCH", rca.confidence, False)
                 )
                 return RepairLoopResult(False, attempts, rca)
 
             if self.config.dry_run:
                 attempts.append(
                     RepairAttempt(
-                        number, [p.path for p in patches], "DRY_RUN", rca.confidence, False
+                        number,
+                        [p.path for p in patches],
+                        "DRY_RUN",
+                        rca.confidence,
+                        False,
                     )
                 )
                 return RepairLoopResult(False, attempts, rca)
@@ -74,11 +73,21 @@ class RepairLoop:
             try:
                 changed = transaction.apply(patches)
                 after = forge.verify(self.config.timeout_seconds)
-
-                # The independent reviewer sees ONLY post-repair evidence.
                 post_evidence = EvidenceBundle(after.execution_id)
+                post_evidence.add(
+                    EvidenceItem(
+                        "verification",
+                        "post-repair",
+                        "\n".join(
+                            f"{check.name}: {check.status.value} exit={check.exit_code}"
+                            for check in after.checks
+                        ),
+                    )
+                )
                 RootCauseAnalysisEngine(self.config.repo).analyze(after, post_evidence)
-                review = IndependentReviewer(self.config.repo).review(post_evidence, changed)
+                review = IndependentReviewer(self.config.repo).review(
+                    post_evidence, changed
+                )
 
                 if after.release_status.value == "VERIFIED" and review.approved:
                     transaction.commit()
