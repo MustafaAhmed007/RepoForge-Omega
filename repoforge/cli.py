@@ -116,6 +116,7 @@ def main() -> None:
                     "verification_status": result.verification_status,
                     "readiness": asdict(result.readiness),
                     "rolled_back": result.rolled_back,
+                    "iterations": result.iterations,
                 },
                 indent=2,
             )
