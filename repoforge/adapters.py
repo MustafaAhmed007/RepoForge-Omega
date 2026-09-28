@@ -20,7 +20,7 @@ class PythonAdapter:
     def checks(self,r):
         py,_=discover_python(r); c=[]
         if (r/"tests").is_dir() or (r/"pytest.ini").exists():c.append(CheckSpec("python-tests",[ *py,"-m","pytest"]))
-        if (r/"pyproject.toml").exists():c.append(CheckSpec("python-compile",[ *py,"-m","compileall","-q","."]))
+        if (r/"pyproject.toml").exists() or any(r.glob("*.py")) or (r/"tests").is_dir():c.append(CheckSpec("python-compile",[ *py,"-m","compileall","-q","."]))
         if (r/"pyproject.toml").exists():
             try: has="[tool.ruff" in (r/"pyproject.toml").read_text(encoding="utf-8")
             except OSError: has=False
