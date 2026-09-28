@@ -24,7 +24,7 @@ def test_detects_python_tests_directory(tmp_path: Path) -> None:
 
 
 def test_ignores_repoforge_and_generated_artifacts(tmp_path: Path) -> None:
-    (tmp_path / "main.py").write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "main.py").write_bytes(b"print('ok')\n")
     (tmp_path / ".repoforge").mkdir()
     (tmp_path / ".repoforge" / "report.json").write_text("{}", encoding="utf-8")
     (tmp_path / "demo.egg-info").mkdir()
