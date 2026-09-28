@@ -16,7 +16,7 @@ class ProjectAdapter(Protocol):
     def dependency_install(self,repo:Path)->list[str]|None:...
 class PythonAdapter:
     name="python"
-    def matches(self,r):return any((r/x).exists() for x in ("pyproject.toml","requirements.txt","setup.py"))
+    def matches(self,r):return any((r/x).exists() for x in ("pyproject.toml","requirements.txt","setup.py")) or (r/"tests").is_dir() or any(r.glob("*.py"))
     def checks(self,r):
         py,_=discover_python(r); c=[]
         if (r/"tests").is_dir() or (r/"pytest.ini").exists():c.append(CheckSpec("python-tests",[ *py,"-m","pytest"]))
