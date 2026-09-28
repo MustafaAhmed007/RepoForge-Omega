@@ -113,7 +113,7 @@ class Autopilot:
         _, findings, proposals = Pipeline(self.config).inspect(verification=baseline)
         planner = RepairPlanner(self.config.repo)
 
-        def provider(rca, verification, evidence):
+        def provider(rca: object, verification: VerificationReport, evidence: object) -> list[FilePatch]:
             deterministic = planner.deterministic_patches(findings)
             if deterministic:
                 return deterministic
