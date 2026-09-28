@@ -3,7 +3,7 @@ import json, subprocess
 from pathlib import Path
 from .models import RepositoryFingerprint
 
-IGNORED_DIRS={".git",".venv","venv","node_modules","__pycache__",".pytest_cache","dist","build"}
+IGNORED_DIRS={" .git"," .venv","venv","node_modules","__pycache__",".pytest_cache","dist","build"}
 EXT={".py":"Python",".ts":"TypeScript",".tsx":"TypeScript",".js":"JavaScript",".jsx":"JavaScript",".java":"Java",".go":"Go",".rs":"Rust",".php":"PHP",".cs":".NET",".cpp":"C++",".c":"C"}
 
 def _git(repo:Path,*args:str)->str|None:
@@ -39,6 +39,8 @@ def detect(repo:Path)->RepositoryFingerprint:
         if n.startswith(".env"): env.append(rel)
     for f,label in {"pytest.ini":"pytest","playwright.config.ts":"Playwright","cypress.config.ts":"Cypress","jest.config.js":"Jest","vitest.config.ts":"Vitest"}.items():
         if (repo/f).exists(): tests.add(label)
+    if (repo/"tests").is_dir() or (repo/"test").is_dir():
+        if "Python" in langs: tests.add("pytest")
     for c in ("main.py","app.py","server.py","src/index.ts","src/index.js","main.go","cmd"):
         if (repo/c).exists(): entry.append(c)
     return RepositoryFingerprint(str(repo),sorted(langs),sorted(frameworks),sorted(pkgs),sorted(builds),sorted(tests),sorted(deploy),sorted(entry),sorted(env),_git(repo,"branch","--show-current"),_git(repo,"rev-parse","HEAD"),count,total)
