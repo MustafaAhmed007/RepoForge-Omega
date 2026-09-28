@@ -16,53 +16,53 @@ class ProjectAdapter(Protocol):
     def dependency_install(self,repo:Path)->list[str]|None:...
 class PythonAdapter:
     name="python"
-    def matches(self, repo: Path) -> bool:return any((r/x).exists() for x in ("pyproject.toml","requirements.txt","setup.py")) or (r/"tests").is_dir() or any(r.glob("*.py"))
+    def matches(self, repo: Path) -> bool:return any((repo/x).exists() for x in ("pyproject.toml","requirements.txt","setup.py")) or (repo/"tests").is_dir() or any(repo.glob("*.py"))
     def checks(self, repo: Path) -> list[CheckSpec]:
-        py,_=discover_python(r); c=[]
-        if (r/"tests").is_dir() or (r/"pytest.ini").exists():c.append(CheckSpec("python-tests",[ *py,"-m","pytest"]))
-        if (r/"pyproject.toml").exists() or any(r.glob("*.py")) or (r/"tests").is_dir():c.append(CheckSpec("python-compile",[ *py,"-m","compileall","-q","."]))
-        if (r/"pyproject.toml").exists():
-            try: has="[tool.ruff" in (r/"pyproject.toml").read_text(encoding="utf-8")
+        py,_=discover_python(repo); c=[]
+        if (repo/"tests").is_dir() or (repo/"pytest.ini").exists():c.append(CheckSpec("python-tests",[ *py,"-m","pytest"]))
+        if (repo/"pyproject.toml").exists() or any(repo.glob("*.py")) or (repo/"tests").is_dir():c.append(CheckSpec("python-compile",[ *py,"-m","compileall","-q","."]))
+        if (repo/"pyproject.toml").exists():
+            try: has="[tool.ruff" in (repo/"pyproject.toml").read_text(encoding="utf-8")
             except OSError: has=False
             if has:c.append(CheckSpec("python-ruff",[ *py,"-m","ruff","check","."]))
-        if (r/"benchmarks"/"run.py").exists():c.append(CheckSpec("python-benchmarks",[ *py,"-m","benchmarks.run"]))
+        if (repo/"benchmarks"/"run.py").exists():c.append(CheckSpec("python-benchmarks",[ *py,"-m","benchmarks.run"]))
         return c
     def dependency_install(self, repo: Path) -> list[str] | None:
-        py,_=discover_python(r)
-        return [*py,"-m","pip","install","-e",".[dev]"] if (r/"pyproject.toml").exists() else ([*py,"-m","pip","install","-r","requirements.txt"] if (r/"requirements.txt").exists() else None)
+        py,_=discover_python(repo)
+        return [*py,"-m","pip","install","-e",".[dev]"] if (repo/"pyproject.toml").exists() else ([*py,"-m","pip","install","-r","requirements.txt"] if (repo/"requirements.txt").exists() else None)
 class NodeAdapter:
     name="node"
-    def matches(self,r):return (r/"package.json").exists()
-    def checks(self,r):
-        try:s=json.loads((r/"package.json").read_text(encoding="utf-8")).get("scripts",{})
+    def matches(self,repo):return (repo/"package.json").exists()
+    def checks(self,repo):
+        try:s=json.loads((repo/"package.json").read_text(encoding="utf-8")).get("scripts",{})
         except (OSError,json.JSONDecodeError):s={}
-        runner,_=discover_node_runner(r); out=[]
+        runner,_=discover_node_runner(repo); out=[]
         for k,cmd in (("lint",[runner,"run","lint"]),("typecheck",[runner,"run","typecheck"]),("test",[runner,"test"]),("build",[runner,"run","build"])):
             if k in s:out.append(CheckSpec(f"{runner}-{k}",cmd))
         return out
-    def dependency_install(self,r):
-        runner,_=discover_node_runner(r)
-        return [runner,"install","--frozen-lockfile"] if runner=="pnpm" else (["yarn","install","--immutable"] if runner=="yarn" else (["npm","ci"] if (r/"package-lock.json").exists() else ["npm","install"]))
+    def dependency_install(self,repo):
+        runner,_=discover_node_runner(repo)
+        return [runner,"install","--frozen-lockfile"] if runner=="pnpm" else (["yarn","install","--immutable"] if runner=="yarn" else (["npm","ci"] if (repo/"package-lock.json").exists() else ["npm","install"]))
 class GoAdapter:
     name="go"
-    def matches(self,r):return (r/"go.mod").exists()
-    def checks(self,r):return [CheckSpec("go-test",["go","test","./..."]),CheckSpec("go-build",["go","build","./..."])]
-    def dependency_install(self,r):return ["go","mod","download"]
+    def matches(self,repo):return (repo/"go.mod").exists()
+    def checks(self,repo):return [CheckSpec("go-test",["go","test","./..."]),CheckSpec("go-build",["go","build","./..."])]
+    def dependency_install(self,repo):return ["go","mod","download"]
 class RustAdapter:
     name="rust"
-    def matches(self,r):return (r/"Cargo.toml").exists()
-    def checks(self,r):return [CheckSpec("cargo-check",["cargo","check"]),CheckSpec("cargo-test",["cargo","test"])]
-    def dependency_install(self,r):return ["cargo","fetch"]
+    def matches(self,repo):return (repo/"Cargo.toml").exists()
+    def checks(self,repo):return [CheckSpec("cargo-check",["cargo","check"]),CheckSpec("cargo-test",["cargo","test"])]
+    def dependency_install(self,repo):return ["cargo","fetch"]
 class JavaAdapter:
     name="java"
-    def matches(self,r):return (r/"pom.xml").exists() or (r/"build.gradle").exists() or (r/"build.gradle.kts").exists()
-    def checks(self,r):return [CheckSpec("maven-test",["mvn","test"])] if (r/"pom.xml").exists() else [CheckSpec("gradle-test",["gradle","test"])]
-    def dependency_install(self,r):return None
+    def matches(self,repo):return (repo/"pom.xml").exists() or (repo/"build.gradle").exists() or (repo/"build.gradle.kts").exists()
+    def checks(self,repo):return [CheckSpec("maven-test",["mvn","test"])] if (repo/"pom.xml").exists() else [CheckSpec("gradle-test",["gradle","test"])]
+    def dependency_install(self,repo):return None
 class DotNetAdapter:
     name="dotnet"
-    def matches(self,r):return any(r.glob("*.sln")) or any(r.glob("*.csproj"))
-    def checks(self,r):return [CheckSpec("dotnet-test",["dotnet","test"]),CheckSpec("dotnet-build",["dotnet","build","--no-restore"])]
-    def dependency_install(self,r):return ["dotnet","restore"]
+    def matches(self,repo):return any(repo.glob("*.sln")) or any(repo.glob("*.csproj"))
+    def checks(self,repo):return [CheckSpec("dotnet-test",["dotnet","test"]),CheckSpec("dotnet-build",["dotnet","build","--no-restore"])]
+    def dependency_install(self,repo):return ["dotnet","restore"]
 class MakeAdapter:
     name = "make"
     def matches(self, repo: Path) -> bool:
