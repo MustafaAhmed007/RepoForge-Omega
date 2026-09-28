@@ -10,7 +10,7 @@ from .diagnostics import DiagnosticFinding
 from .engine import RepoForge
 from .memory import MemoryStore
 from .models import VerificationReport
-from .patching import FilePatch, SafePatcher
+from .patching import FilePatch
 from .pipeline import Pipeline
 from .providers import ModelRequest, provider_from_environment
 from .readiness import Readiness, assess
