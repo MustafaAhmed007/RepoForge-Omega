@@ -32,7 +32,7 @@ class RepairLoop:
     def __init__(self, config: ForgeConfig) -> None:
         self.config = config
 
-    def run(self, patch_provider) -> RepairLoopResult:
+    def run(self, patch_provider: Callable[[RootCauseAnalysis, object, EvidenceBundle], list[FilePatch]]) -> RepairLoopResult:
         attempts: list[RepairAttempt] = []
         forge = RepoForge(self.config.repo)
 
