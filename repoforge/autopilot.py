@@ -116,7 +116,7 @@ class Autopilot:
         planner = RepairPlanner(self.config.repo)
 
         def provider(rca: RootCauseAnalysis, verification: VerificationReport, evidence: EvidenceBundle) -> list[FilePatch]:
-            deterministic = planner.deterministic_patches(findings)
+            deterministic = planner.deterministic_patches(rca, verification, findings)
             if deterministic:
                 return deterministic
             if patches is not None:
@@ -130,14 +130,13 @@ class Autopilot:
         result = loop.run(provider)
 
         final = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
-        readiness = assess(self.config.repo)
+        readiness = assess(self.config.repo, final)
         changed: list[str] = []
         rolled_back = False
         for attempt in result.attempts:
             changed.extend(attempt.patches)
             rolled_back = rolled_back or attempt.status == "ROLLED_BACK"
         if result.verified and result.attempts:
-            # Only the successful attempt remains as a committed mutation.
             changed = result.attempts[-1].patches
 
         MemoryStore(self.config.repo / ".repoforge" / "events.jsonl").append(
