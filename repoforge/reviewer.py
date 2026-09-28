@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .evidence import EvidenceBundle
-from .providers import ModelRequest, provider_from_environment
+from .providers import ModelRequest, provider_for_role
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +74,7 @@ class IndependentReviewer:
         if not deterministic.approved:
             return deterministic
 
-        provider = provider_from_environment()
+        provider = provider_for_role("review")
         if getattr(provider, "name", "disabled") == "disabled":
             return deterministic
 
