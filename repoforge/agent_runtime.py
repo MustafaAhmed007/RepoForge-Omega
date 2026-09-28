@@ -10,7 +10,7 @@ class AgentResult:role:str;output:str;error:str|None=None
 class IndependentAgentRuntime:
     def __init__(self,max_workers:int=4):self.max_workers=max(1,max_workers)
     def run(self,repo:Path,tasks:list[AgentTask],worker:Callable[[Path,AgentTask],str])->list[AgentResult]:
-        def invoke(t):
+        def invoke(t: AgentTask) -> AgentResult:
             try:return AgentResult(t.role,worker(repo,t))
             except Exception as e:return AgentResult(t.role,"",str(e))
         with ThreadPoolExecutor(max_workers=min(self.max_workers,len(tasks) or 1)) as pool:return list(pool.map(invoke,tasks))
