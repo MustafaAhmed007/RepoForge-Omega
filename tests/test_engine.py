@@ -30,3 +30,23 @@ def test_python_checks_prefer_target_venv(tmp_path: Path) -> None:
 
     assert commands["python-tests"][:3] == [str(python.resolve()), "-m", "pytest"]
     assert commands["python-compile"][:3] == [str(python.resolve()), "-m", "compileall"]
+
+
+def test_optional_make_check_does_not_block_release(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='sample'\n", encoding="utf-8"
+    )
+    (tmp_path / "sample.py").write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_ok.py").write_text(
+        "def test_ok(): assert True\n", encoding="utf-8"
+    )
+    (tmp_path / "Makefile").write_text(
+        "test:\n\tpython -m pytest\n", encoding="utf-8"
+    )
+
+    report = RepoForge(tmp_path).verify()
+
+    make_checks = [check for check in report.checks if check.name == "make-test"]
+    assert make_checks
+    assert make_checks[0].required is False
