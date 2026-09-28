@@ -19,14 +19,20 @@ class RepairTransaction:
         allow_dirty_files: bool = False,
     ) -> None:
         self.repo = repo.resolve()
+        self.max_files = max_files
+        self.max_patch_bytes = max_patch_bytes
         self.patcher = SafePatcher(
             self.repo,
             max_files=max_files,
             max_patch_bytes=max_patch_bytes,
             allow_dirty_files=allow_dirty_files,
         )
-        self.max_files = max_files
-        self.max_patch_bytes = max_patch_bytes
+        self.continuation_patcher = SafePatcher(
+            self.repo,
+            max_files=max_files,
+            max_patch_bytes=max_patch_bytes,
+            allow_dirty_files=True,
+        )
         self._patch_bytes = 0
         self._backup: Path | None = None
         self._touched: list[Path] = []
@@ -60,7 +66,8 @@ class RepairTransaction:
                 f"cumulative repair exceeds max_patch_bytes={self.max_patch_bytes}"
             )
 
-        self.patcher.apply(patches, dry_run=True)
+        patcher = self.patcher if not self._touched else self.continuation_patcher
+        patcher.apply(patches, dry_run=True)
         if self._backup is None:
             self._backup = Path(tempfile.mkdtemp(prefix="repoforge-backup-"))
 
@@ -76,7 +83,7 @@ class RepairTransaction:
                 self._touched.append(target)
 
         try:
-            changed = self.patcher.apply(patches, dry_run=False)
+            changed = patcher.apply(patches, dry_run=False)
             self._patch_bytes += patch_bytes
             return changed
         except Exception:
