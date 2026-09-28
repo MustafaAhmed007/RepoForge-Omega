@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .config import ForgeConfig
@@ -84,7 +84,7 @@ def _model_patches(
             "You are a repair agent. Return ONLY JSON patches. Never modify existing tests. Use only supplied evidence.",
             "Find the smallest production-code change that addresses the observed failure.",
             json.dumps({
-                "findings": [vars(f) for f in findings],
+                "findings": [asdict(f) for f in findings],
                 "verification": verification.to_dict(),
                 "files": relevant,
             }),
