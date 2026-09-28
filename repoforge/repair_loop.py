@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
-
 from .config import ForgeConfig
 from .engine import RepoForge
 from .evidence import EvidenceBundle, EvidenceItem
