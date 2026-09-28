@@ -23,6 +23,8 @@ def test_python_checks_prefer_target_venv(tmp_path: Path) -> None:
     target.mkdir(parents=True)
     python = target / "python.exe"
     python.write_text("", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
 
     commands = dict(RepoForge(tmp_path).discover_checks())
 
