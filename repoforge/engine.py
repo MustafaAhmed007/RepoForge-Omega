@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json,uuid
+import json,sys,uuid
 from pathlib import Path
 from .fingerprint import detect
 from .models import CheckResult,GateStatus,ReleaseStatus,VerificationReport,RepositoryFingerprint
@@ -11,8 +11,8 @@ class RepoForge:
     def discover_checks(self)->list[tuple[str,list[str]]]:
         fp=self.fingerprint(); checks:list[tuple[str,list[str]]]=[]
         if 'Python' in fp.languages:
-            if (self.repo/'tests').is_dir() or (self.repo/'pytest.ini').exists(): checks.append(('python-tests',['python','-m','pytest']))
-            if (self.repo/'pyproject.toml').exists(): checks.append(('python-compile',['python','-m','compileall','-q','.']))
+            if (self.repo/'tests').is_dir() or (self.repo/'pytest.ini').exists(): checks.append(('python-tests',[sys.executable,'-m','pytest']))
+            if (self.repo/'pyproject.toml').exists(): checks.append(('python-compile',[sys.executable,'-m','compileall','-q','.']))
         if 'JavaScript' in fp.languages or 'TypeScript' in fp.languages:
             pkg=self.repo/'package.json'
             if pkg.exists():
