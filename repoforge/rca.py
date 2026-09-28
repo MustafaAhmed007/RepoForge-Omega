@@ -19,7 +19,10 @@ class RootCauseAnalysis:
     reproduction:list[str]=field(default_factory=list)
     missing_evidence:list[str]=field(default_factory=list)
     confidence:float=0.0
-    def primary(self) -> Hypothesis | None:\n        if not self.hypotheses:\n            return None\n        return max(self.hypotheses, key=lambda h: h.confidence)\nclass RootCauseAnalysisEngine:
+    def primary(self) -> Hypothesis | None:
+        if not self.hypotheses:
+            return None
+        return max(self.hypotheses, key=lambda h: h.confidence)\nclass RootCauseAnalysisEngine:
     def __init__(self,repo:Path) -> None:self.repo=repo.resolve()
     def analyze(self, verification: VerificationReport, evidence: EvidenceBundle) -> RootCauseAnalysis:
         failures=[c for c in verification.checks if c.status.value in {"FAIL","BLOCKED"}]
@@ -37,7 +40,10 @@ class RootCauseAnalysis:
         for p in sorted(set(affected))[:20]:
             f=(self.repo/p).resolve()
             if f.is_file() and self.repo in f.parents:evidence.add(EvidenceItem("source",p,f.read_text(encoding="utf-8",errors="replace")[:50000],.8))
-        confidence = 0.0\n        for hypothesis in hs:\n            confidence = max(confidence, hypothesis.confidence)\n        return RootCauseAnalysis(evidence.run_id, f"{check.name} failed", hs, sorted(set(affected)), [check.name], confidence)
+        confidence = 0.0
+        for hypothesis in hs:
+            confidence = max(confidence, hypothesis.confidence)
+        return RootCauseAnalysis(evidence.run_id, f"{check.name} failed", hs, sorted(set(affected)), [check.name], confidence)
     def _find_symbol(self, symbol: str) -> list[str]:
         out=[]
         for p in self.repo.rglob("*.py"):
