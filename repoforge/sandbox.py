@@ -72,3 +72,51 @@ class ExecutionSandbox:
                     "TIMEOUT", None, "", f"timeout after {self.timeout_s}s",
                     int((time.perf_counter() - started) * 1000), str(workspace),
                 )
+
+
+@dataclass(frozen=True, slots=True)
+class ContainerSandboxPolicy:
+    image: str
+    network: bool = False
+    memory: str = "2g"
+    cpus: str = "2"
+
+class DockerSandbox:
+    """Stronger optional isolation when Docker is available."""
+
+    def __init__(self, repo: Path, policy: ContainerSandboxPolicy, timeout_s: int = 120):
+        self.repo = repo.resolve()
+        self.policy = policy
+        self.timeout_s = timeout_s
+
+    def run(self, command: list[str]) -> SandboxResult:
+        import time
+        from .security import assess_command
+        ok, reason = assess_command(command)
+        if not ok:
+            return SandboxResult("BLOCKED", None, "", reason or "", 0, str(self.repo))
+        docker = ["docker", "run", "--rm", "-i", "--memory", self.policy.memory, "--cpus", self.policy.cpus]
+        docker += ["--network", "none" if not self.policy.network else "bridge"]
+        docker += ["-v", f"{self.repo}:/workspace", "-w", "/workspace", self.policy.image]
+        docker += command
+        started = time.perf_counter()
+        try:
+            proc = subprocess.run(
+                docker,
+                text=True,
+                capture_output=True,
+                timeout=self.timeout_s,
+                shell=False,
+            )
+            return SandboxResult(
+                "PASS" if proc.returncode == 0 else "FAIL",
+                proc.returncode,
+                proc.stdout[-12000:],
+                proc.stderr[-12000:],
+                int((time.perf_counter() - started) * 1000),
+                str(self.repo),
+            )
+        except FileNotFoundError:
+            return SandboxResult("BLOCKED", None, "", "Docker executable not found.", 0, str(self.repo))
+        except subprocess.TimeoutExpired:
+            return SandboxResult("TIMEOUT", None, "", f"timeout after {self.timeout_s}s", int((time.perf_counter() - started) * 1000), str(self.repo))
