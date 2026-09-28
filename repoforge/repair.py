@@ -103,15 +103,19 @@ class RepairPlanner:
         if not output:
             return []
 
-        patches: list[FilePatch] = []
+        current: dict[str, str] = {}
+        originals: dict[str, str] = {}
         diagnostics = self._ruff_diagnostics(output)
         for code, relative, line_number in diagnostics:
             normalized = relative.replace("\\", "/")
             path = self.repo / normalized
             if not path.is_file() or normalized.startswith("tests/"):
                 continue
-            text = path.read_text(encoding="utf-8", errors="replace")
+            if normalized not in current:
+                current[normalized] = path.read_text(encoding="utf-8", errors="replace")
+                originals[normalized] = current[normalized]
 
+            text = current[normalized]
             if code == "FURB167":
                 replacement = self._replace_re_alias_on_line(text, line_number)
             elif code == "I001":
@@ -122,9 +126,13 @@ class RepairPlanner:
                 replacement = None
 
             if replacement is not None and replacement != text:
-                patches.append(FilePatch(normalized, text, replacement))
+                current[normalized] = replacement
 
-        return patches
+        return [
+            FilePatch(path, originals[path], current[path])
+            for path in originals
+            if current[path] != originals[path]
+        ]
 
     @staticmethod
     def _ruff_diagnostics(output: str) -> list[tuple[str, str, int]]:
