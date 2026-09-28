@@ -40,88 +40,112 @@ class RepairLoop:
     ) -> RepairLoopResult:
         attempts: list[RepairAttempt] = []
         forge = RepoForge(self.config.repo)
+        transaction = RepairTransaction(
+            self.config.repo,
+            max_files=self.config.max_files_changed,
+            max_patch_bytes=self.config.max_patch_bytes,
+            allow_dirty_files=self.config.allow_dirty_files,
+        )
+        committed = False
 
-        for number in range(1, self.config.max_repair_attempts + 1):
-            verification = forge.verify(self.config.timeout_seconds)
-            if verification.release_status.value == "VERIFIED":
-                return RepairLoopResult(True, attempts)
+        try:
+            for number in range(1, self.config.max_repair_attempts + 1):
+                verification = forge.verify(self.config.timeout_seconds)
+                if verification.release_status.value == "VERIFIED":
+                    if not self._review_and_commit(transaction, verification, attempts):
+                        transaction.rollback()
+                        return RepairLoopResult(False, attempts)
+                    committed = True
+                    return RepairLoopResult(True, attempts)
 
-            evidence = EvidenceBundle(verification.execution_id)
-            rca = RootCauseAnalysisEngine(self.config.repo).analyze(verification, evidence)
-            patches = patch_provider(rca, verification, evidence)
+                evidence = EvidenceBundle(verification.execution_id)
+                rca = RootCauseAnalysisEngine(self.config.repo).analyze(verification, evidence)
+                patches = patch_provider(rca, verification, evidence)
 
-            if not patches:
-                attempts.append(
-                    RepairAttempt(number, [], "NO_PATCH", rca.confidence, False)
-                )
-                return RepairLoopResult(False, attempts, rca)
-
-            if self.config.dry_run:
-                attempts.append(
-                    RepairAttempt(
-                        number,
-                        [p.path for p in patches],
-                        "DRY_RUN",
-                        rca.confidence,
-                        False,
+                if not patches:
+                    attempts.append(
+                        RepairAttempt(number, [], "NO_PATCH", rca.confidence, False)
                     )
-                )
-                return RepairLoopResult(False, attempts, rca)
+                    transaction.rollback()
+                    return RepairLoopResult(False, attempts, rca)
 
-            transaction = RepairTransaction(
-                self.config.repo,
-                max_files=self.config.max_files_changed,
-                max_patch_bytes=self.config.max_patch_bytes,
-                allow_dirty_files=self.config.allow_dirty_files,
-            )
-
-            try:
-                changed = transaction.apply(patches)
-                after = forge.verify(self.config.timeout_seconds)
-                post_evidence = EvidenceBundle(after.execution_id)
-                post_evidence.add(
-                    EvidenceItem(
-                        "verification",
-                        "post-repair",
-                        "\n".join(
-                            f"{check.name}: {check.status.value} exit={check.exit_code}"
-                            for check in after.checks
-                        ),
-                    )
-                )
-                RootCauseAnalysisEngine(self.config.repo).analyze(after, post_evidence)
-                review = IndependentReviewer(self.config.repo).review(
-                    post_evidence, changed
-                )
-
-                if after.release_status.value == "VERIFIED" and review.approved:
-                    transaction.commit()
+                if self.config.dry_run:
                     attempts.append(
                         RepairAttempt(
-                            number, changed, "VERIFIED", rca.confidence, True
+                            number,
+                            [p.path for p in patches],
+                            "DRY_RUN",
+                            rca.confidence,
+                            False,
                         )
                     )
-                    return RepairLoopResult(True, attempts, rca)
+                    transaction.rollback()
+                    return RepairLoopResult(False, attempts, rca)
 
-                transaction.rollback()
+                changed = transaction.apply(patches)
                 attempts.append(
                     RepairAttempt(
                         number,
                         changed,
-                        "ROLLED_BACK",
+                        "APPLIED",
                         rca.confidence,
-                        review.approved,
-                        "Verification or independent review failed.",
+                        False,
                     )
                 )
-            except Exception as exc:
-                transaction.rollback()
-                attempts.append(
-                    RepairAttempt(number, [], "ERROR", rca.confidence, False, str(exc))
-                )
 
-        return RepairLoopResult(
-            False,
-            attempts,
-            rca if "rca" in locals() else None,
+            final = forge.verify(self.config.timeout_seconds)
+            if final.release_status.value != "VERIFIED":
+                reason = "Repair budget exhausted; required verification checks still fail."
+                if final.blockers:
+                    reason += " Blockers: " + ", ".join(final.blockers)
+                if attempts:
+                    attempts[-1].reason = reason
+                    attempts[-1].status = "ROLLED_BACK"
+                transaction.rollback()
+                return RepairLoopResult(False, attempts, rca if "rca" in locals() else None)
+
+            if not self._review_and_commit(transaction, final, attempts):
+                transaction.rollback()
+                return RepairLoopResult(False, attempts, rca if "rca" in locals() else None)
+
+            committed = True
+            if attempts:
+                attempts[-1].status = "VERIFIED"
+                attempts[-1].review_approved = True
+            return RepairLoopResult(True, attempts, rca if "rca" in locals() else None)
+        except Exception as exc:
+            transaction.rollback()
+            if attempts:
+                attempts[-1].status = "ERROR"
+                attempts[-1].reason = str(exc)
+            return RepairLoopResult(False, attempts, rca if "rca" in locals() else None)
+        finally:
+            if not committed:
+                transaction.rollback()
+
+    def _review_and_commit(
+        self,
+        transaction: RepairTransaction,
+        verification: VerificationReport,
+        attempts: list[RepairAttempt],
+    ) -> bool:
+        evidence = EvidenceBundle(verification.execution_id)
+        evidence.add(
+            EvidenceItem(
+                "verification",
+                "final",
+                "\n".join(
+                    f"{check.name}: {check.status.value} exit={check.exit_code}"
+                    for check in verification.checks
+                ),
+            )
         )
+        changed = [path for attempt in attempts for path in attempt.patches]
+        review = IndependentReviewer(self.config.repo).review(evidence, changed)
+        if review.approved:
+            transaction.commit()
+            return True
+        if attempts:
+            attempts[-1].reason = "Independent review rejected the candidate."
+            attempts[-1].review_approved = False
+        return False
