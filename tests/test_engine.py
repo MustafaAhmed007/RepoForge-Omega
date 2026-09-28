@@ -8,6 +8,7 @@ from repoforge.engine import RepoForge
 
 def test_python_checks_use_active_interpreter(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n", encoding="utf-8")
+    (tmp_path / "sample.py").write_text("print('ok')\n", encoding="utf-8")
     (tmp_path / "tests").mkdir()
 
     checks = RepoForge(tmp_path).discover_checks()
