@@ -44,7 +44,7 @@ class RootCauseAnalysisEngine:
         confidence = 0.0
         for hypothesis in hs:
             confidence = max(confidence, hypothesis.confidence)
-        return RootCauseAnalysis(evidence.run_id, f"{check.name} failed", hs, sorted(set(affected)), [check.name], confidence)
+        return RootCauseAnalysis(\n            evidence.run_id,\n            f"{check.name} failed",\n            hs,\n            sorted(set(affected)),\n            [check.name],\n            confidence=confidence,\n        )
     def _find_symbol(self, symbol: str) -> list[str]:
         out=[]
         for p in self.repo.rglob("*.py"):
