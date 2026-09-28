@@ -130,7 +130,7 @@ class RepairPlanner:
     def _ruff_diagnostics(output: str) -> list[tuple[str, str, int]]:
         matches: list[tuple[str, str, int]] = []
         blocks = re.split(r"\n\s*\n", output)
-        pattern = re.compile(r"^\s*([A-Z][A-Z0-9]{2,5})\b.*?^\s*-->\s*(.+?):(\d+):\d+", re.M | re.S)
+        pattern = re.compile(r"^\s*([A-Z][A-Z0-9]{2,6})\b.*?^\s*-->\s*(.+?):(\d+):\d+", re.M | re.S)
         for block in blocks:
             match = pattern.search(block)
             if match:
@@ -158,6 +158,8 @@ class RepairPlanner:
         lines = text.splitlines(keepends=True)
         start = None
         for index, line in enumerate(lines[:80]):
+            if line.startswith("from __future__ import "):
+                continue
             if line.startswith("import ") or line.startswith("from "):
                 start = index
                 break
