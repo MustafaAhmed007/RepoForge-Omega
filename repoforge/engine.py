@@ -29,10 +29,37 @@ class RepoForge:
 
         if "Python" in fp.languages:
             python_cmd, _ = discover_python(self.repo)
+
             if (self.repo / "tests").is_dir() or (self.repo / "pytest.ini").exists():
                 checks.append(("python-tests", [*python_cmd, "-m", "pytest"]))
+
             if (self.repo / "pyproject.toml").exists():
-                checks.append(("python-compile", [*python_cmd, "-m", "compileall", "-q", "."]))
+                checks.append(
+                    ("python-compile", [*python_cmd, "-m", "compileall", "-q", "."])
+                )
+
+            ruff_config = any(
+                (self.repo / filename).exists()
+                for filename in ("ruff.toml", ".ruff.toml")
+            )
+            if (self.repo / "pyproject.toml").exists():
+                try:
+                    pyproject = json.loads(
+                        '{"tool":{}}'
+                    )  # TOML parsing is intentionally avoided for Python 3.10 compatibility.
+                    pyproject_text = (self.repo / "pyproject.toml").read_text(
+                        encoding="utf-8", errors="ignore"
+                    )
+                    ruff_config = ruff_config or "[tool.ruff" in pyproject_text
+                except OSError:
+                    pyproject = {}
+            if ruff_config:
+                checks.append(("python-ruff", [*python_cmd, "-m", "ruff", "check", "."]))
+
+            if (self.repo / "benchmarks" / "run.py").exists():
+                checks.append(
+                    ("python-benchmarks", [*python_cmd, "-m", "benchmarks.run"])
+                )
 
         if "JavaScript" in fp.languages or "TypeScript" in fp.languages:
             pkg = self.repo / "package.json"
@@ -52,7 +79,10 @@ class RepoForge:
                         checks.append((f"{runner}-{key}", cmd))
 
         if "Go" in fp.languages and (self.repo / "go.mod").exists():
-            checks += [("go-test", ["go", "test", "./..."]), ("go-build", ["go", "build", "./..."])]
+            checks += [
+                ("go-test", ["go", "test", "./..."]),
+                ("go-build", ["go", "build", "./..."]),
+            ]
         if "Rust" in fp.languages and (self.repo / "Cargo.toml").exists():
             checks += [("cargo-check", ["cargo", "check"]), ("cargo-test", ["cargo", "test"])]
 
@@ -60,7 +90,10 @@ class RepoForge:
 
     def verify(self, timeout_s: int = 120) -> VerificationReport:
         fp = self.fingerprint()
-        checks = [run_check(name, command, self.repo, timeout_s) for name, command in self.discover_checks()]
+        checks = [
+            run_check(name, command, self.repo, timeout_s)
+            for name, command in self.discover_checks()
+        ]
         if not checks:
             checks = [
                 CheckResult(
