@@ -451,6 +451,12 @@ ENGINEERING CORE
 
 The core is intentionally modular: detection, execution, repair, verification, provider integration, and reporting can evolve independently.
 
+## Audit reality and verification boundary
+
+A source inspection can identify configuration and code-structure signals, but it cannot substitute for executing the verification suite against the current commit. The repository's CI is the authoritative check for this project's own test/lint/type/build pipeline.
+
+RepoForge itself also deliberately distinguishes `VERIFIED` from universal correctness: passing discovered checks is evidence about the checks that ran, not proof that arbitrary software has zero defects.
+
 ## Limitations
 
 No tool can truthfully guarantee that arbitrary software is permanently bug-free. RepoForge therefore reports evidence-backed states rather than inventing certainty. Browser-specific behavior, proprietary infrastructure, credentials, production deployment, and unsupported language ecosystems require an appropriate adapter and environment.
