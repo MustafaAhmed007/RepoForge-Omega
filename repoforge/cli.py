@@ -6,7 +6,13 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from .autopilot import Autopilot\nfrom .browser import BrowserVerifier\nfrom .ci import discover_ci\nfrom .dependencies import plan_dependency_install\nfrom .evaluation import EvaluationEngine\nfrom .evidence import EvidenceBundle\nfrom .rca import RootCauseAnalysisEngine
+from .autopilot import Autopilot
+from .browser import BrowserVerifier
+from .ci import discover_ci
+from .dependencies import plan_dependency_install
+from .evaluation import EvaluationEngine
+from .evidence import EvidenceBundle
+from .rca import RootCauseAnalysisEngine
 from .bootstrap import bootstrap
 from .config import ForgeConfig
 from .deploy import plan as deployment_plan
@@ -38,7 +44,24 @@ def main() -> None:
         help="Run deterministic checks and include their failures in diagnostics.",
     )
 
-    command = sub.add_parser("rca")\n    command.add_argument("path", nargs="?", default=".")\n    command.add_argument("--timeout", type=int, default=120)\n\n    command = sub.add_parser("evaluate")\n    command.add_argument("path", nargs="?", default=".")\n    command.add_argument("--timeout", type=int, default=120)\n\n    command = sub.add_parser("dependencies")\n    command.add_argument("path", nargs="?", default=".")\n\n    command = sub.add_parser("ci")\n    command.add_argument("path", nargs="?", default=".")\n\n    command = sub.add_parser("browser")\n    command.add_argument("url")\n\n    command = sub.add_parser("secrets")
+    command = sub.add_parser("rca")
+    command.add_argument("path", nargs="?", default=".")
+    command.add_argument("--timeout", type=int, default=120)
+
+    command = sub.add_parser("evaluate")
+    command.add_argument("path", nargs="?", default=".")
+    command.add_argument("--timeout", type=int, default=120)
+
+    command = sub.add_parser("dependencies")
+    command.add_argument("path", nargs="?", default=".")
+
+    command = sub.add_parser("ci")
+    command.add_argument("path", nargs="?", default=".")
+
+    command = sub.add_parser("browser")
+    command.add_argument("url")
+
+    command = sub.add_parser("secrets")
     command.add_argument("path", nargs="?", default=".")
 
     command = sub.add_parser("init")
@@ -62,7 +85,11 @@ def main() -> None:
     command.add_argument("--timeout", type=int, default=120)
 
     args = parser.parse_args()
-    if args.command == "browser":\n        print(json.dumps(asdict(BrowserVerifier().verify(args.url)), indent=2))\n        return\n\n    repo = Path(args.path).resolve()
+    if args.command == "browser":
+        print(json.dumps(asdict(BrowserVerifier().verify(args.url)), indent=2))
+        return
+
+    repo = Path(args.path).resolve()
     if not repo.is_dir():
         print(f"Invalid repository path: {repo}", file=sys.stderr)
         raise SystemExit(2)
@@ -122,7 +149,26 @@ def main() -> None:
         )
         raise SystemExit(0 if result.goal_status == "VERIFIED" else 1)
 
-    if args.command == "rca":\n        verification = RepoForge(repo).verify(args.timeout)\n        evidence = EvidenceBundle(verification.execution_id)\n        rca = RootCauseAnalysisEngine(repo).analyze(verification, evidence)\n        print(json.dumps({"failure": rca.failure, "confidence": rca.confidence, "affected_files": rca.affected_files, "hypotheses": [asdict(x) for x in rca.hypotheses], "evidence_digest": evidence.digest()}, indent=2))\n        raise SystemExit(0 if verification.release_status.value == "VERIFIED" else 1)\n\n    if args.command == "evaluate":\n        print(json.dumps(asdict(EvaluationEngine().evaluate(repo, 120)), indent=2))\n        return\n\n    if args.command == "dependencies":\n        print(json.dumps(asdict(plan_dependency_install(repo)), indent=2))\n        return\n\n    if args.command == "ci":\n        print(json.dumps([asdict(x) for x in discover_ci(repo)], indent=2))\n        return\n\n    if args.command == "inspect":
+    if args.command == "rca":
+        verification = RepoForge(repo).verify(args.timeout)
+        evidence = EvidenceBundle(verification.execution_id)
+        rca = RootCauseAnalysisEngine(repo).analyze(verification, evidence)
+        print(json.dumps({"failure": rca.failure, "confidence": rca.confidence, "affected_files": rca.affected_files, "hypotheses": [asdict(x) for x in rca.hypotheses], "evidence_digest": evidence.digest()}, indent=2))
+        raise SystemExit(0 if verification.release_status.value == "VERIFIED" else 1)
+
+    if args.command == "evaluate":
+        print(json.dumps(asdict(EvaluationEngine().evaluate(repo, 120)), indent=2))
+        return
+
+    if args.command == "dependencies":
+        print(json.dumps(asdict(plan_dependency_install(repo)), indent=2))
+        return
+
+    if args.command == "ci":
+        print(json.dumps([asdict(x) for x in discover_ci(repo)], indent=2))
+        return
+
+    if args.command == "inspect":
         verification = RepoForge(repo).verify(args.timeout) if args.verify else None
         fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(
             Path(args.out),
