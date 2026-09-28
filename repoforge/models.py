@@ -26,6 +26,7 @@ class CheckResult:
     stderr: str = ""
     command: list[str] = field(default_factory=list)
     reason: str | None = None
+    required: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
