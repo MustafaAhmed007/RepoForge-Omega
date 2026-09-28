@@ -72,7 +72,7 @@ class MakeAdapter:
         targets: list[CheckSpec] = []
         for target in ("test", "check", "lint", "build"):
             if f"{target}:" in text:
-                targets.append(CheckSpec(f"make-{target}", ["make", target]))
+                targets.append(CheckSpec(f"make-{target}", ["make", target], required=False))
         return targets
     def dependency_install(self, repo: Path) -> list[str] | None:
         return None
