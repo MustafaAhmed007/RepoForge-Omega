@@ -33,9 +33,11 @@ def assess(
     ]
 
     if verification is not None:
-        for check in verification.checks:
-            if check.status.value in {"FAIL", "BLOCKED"}:
-                blockers.append(check.name)
+        blockers.extend(
+            check.name
+            for check in verification.checks
+            if check.required and check.status.value in {"FAIL", "BLOCKED"}
+        )
 
     # A repository cannot be declared ready when deterministic verification
     # is not VERIFIED, regardless of structural fingerprint checks.
