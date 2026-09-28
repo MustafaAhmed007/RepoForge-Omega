@@ -3,7 +3,7 @@ import json, subprocess
 from pathlib import Path
 from .models import RepositoryFingerprint
 
-IGNORED_DIRS={" .git"," .venv","venv","node_modules","__pycache__",".pytest_cache","dist","build"}
+IGNORED_DIRS={".git",".venv","venv","node_modules","__pycache__",".pytest_cache","dist","build"}
 EXT={".py":"Python",".ts":"TypeScript",".tsx":"TypeScript",".js":"JavaScript",".jsx":"JavaScript",".java":"Java",".go":"Go",".rs":"Rust",".php":"PHP",".cs":".NET",".cpp":"C++",".c":"C"}
 
 def _git(repo:Path,*args:str)->str|None:
