@@ -11,9 +11,9 @@ class Trace:
     started:float
     ended:float=0.0
     attributes:dict[str,str]|None=None
-    def finish(self):self.ended=time.perf_counter()
+    def finish(self) -> None:self.ended=time.perf_counter()
 class TraceStore:
-    def __init__(self,path:Path):self.path=path
+    def __init__(self, path: Path) -> None:self.path=path
     @contextmanager
     def span(self,operation:str,**attributes:str)->Iterator[Trace]:
         t=Trace(uuid.uuid4().hex,operation,time.perf_counter(),attributes=dict(attributes))
