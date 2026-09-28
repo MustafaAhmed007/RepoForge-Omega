@@ -17,78 +17,148 @@ from .secrets import scan as scan_secrets
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         prog="repoforge",
         description="Autonomous repository engineering and deployment-readiness platform",
     )
-    sub = p.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=True)
+
     for name in ("scan", "verify", "doctor"):
-        c = sub.add_parser(name)
-        c.add_argument("path", nargs="?", default=".")
-        c.add_argument("--timeout", type=int, default=120)
-    c = sub.add_parser("inspect"); c.add_argument("path", nargs="?", default="."); c.add_argument("--out", default=".repoforge")
-    c = sub.add_parser("secrets"); c.add_argument("path", nargs="?", default=".")
-    c = sub.add_parser("init"); c.add_argument("path", nargs="?", default=".")
-    c = sub.add_parser("autopilot"); c.add_argument("path", nargs="?", default="."); c.add_argument("--timeout", type=int, default=120); c.add_argument("--apply", action="store_true")
-    c = sub.add_parser("goal"); c.add_argument("path", nargs="?", default="."); c.add_argument("--timeout", type=int, default=120); c.add_argument("--apply", action="store_true"); c.add_argument("--max-iterations", type=int, default=3)
-    c = sub.add_parser("deploy-plan"); c.add_argument("path", nargs="?", default="."); c.add_argument("--timeout", type=int, default=120)
-    a = p.parse_args()
-    repo = Path(a.path).resolve()
+        command = sub.add_parser(name)
+        command.add_argument("path", nargs="?", default=".")
+        command.add_argument("--timeout", type=int, default=120)
+
+    command = sub.add_parser("inspect")
+    command.add_argument("path", nargs="?", default=".")
+    command.add_argument("--out", default=".repoforge")
+    command.add_argument(
+        "--verify",
+        action="store_true",
+        help="Run deterministic checks and include their failures in diagnostics.",
+    )
+
+    command = sub.add_parser("secrets")
+    command.add_argument("path", nargs="?", default=".")
+
+    command = sub.add_parser("init")
+    command.add_argument("path", nargs="?", default=".")
+
+    command = sub.add_parser("autopilot")
+    command.add_argument("path", nargs="?", default=".")
+    command.add_argument("--timeout", type=int, default=120)
+    command.add_argument("--apply", action="store_true")
+    command.add_argument("--allow-dirty-files", action="store_true")
+
+    command = sub.add_parser("goal")
+    command.add_argument("path", nargs="?", default=".")
+    command.add_argument("--timeout", type=int, default=120)
+    command.add_argument("--apply", action="store_true")
+    command.add_argument("--max-iterations", type=int, default=3)
+    command.add_argument("--allow-dirty-files", action="store_true")
+
+    command = sub.add_parser("deploy-plan")
+    command.add_argument("path", nargs="?", default=".")
+    command.add_argument("--timeout", type=int, default=120)
+
+    args = parser.parse_args()
+    repo = Path(args.path).resolve()
     if not repo.is_dir():
         print(f"Invalid repository path: {repo}", file=sys.stderr)
         raise SystemExit(2)
-    if a.command == "init":
-        print(bootstrap(repo)); return
-    if a.command == "autopilot":
-        autopilot_result = Autopilot(ForgeConfig.for_repo(repo, timeout_seconds=a.timeout, dry_run=not a.apply)).run()
-        print(json.dumps({
-            "findings": autopilot_result.findings,
-            "proposals": autopilot_result.proposals,
-            "patched": autopilot_result.patched,
-            "verification_status": autopilot_result.verification_status,
-            "readiness": asdict(autopilot_result.readiness),
-            "rolled_back": autopilot_result.rolled_back,
-        }, indent=2))
+
+    if args.command == "init":
+        print(bootstrap(repo))
         return
-    if a.command == "goal":
+
+    if args.command == "autopilot":
+        result = Autopilot(
+            ForgeConfig.for_repo(
+                repo,
+                timeout_seconds=args.timeout,
+                dry_run=not args.apply,
+                allow_dirty_files=args.allow_dirty_files,
+            )
+        ).run()
+        print(
+            json.dumps(
+                {
+                    "findings": result.findings,
+                    "proposals": result.proposals,
+                    "patched": result.patched,
+                    "verification_status": result.verification_status,
+                    "readiness": asdict(result.readiness),
+                    "rolled_back": result.rolled_back,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if args.command == "goal":
         config = ForgeConfig.for_repo(
             repo,
-            timeout_seconds=a.timeout,
-            dry_run=not a.apply,
-            max_goal_iterations=a.max_iterations,
+            timeout_seconds=args.timeout,
+            dry_run=not args.apply,
+            max_goal_iterations=args.max_iterations,
+            allow_dirty_files=args.allow_dirty_files,
         )
-        goal_result = Orchestrator(config).run()
-        print(json.dumps({
-            "goal": "make any given repository deployment-ready",
-            "goal_id": goal_result.goal_id,
-            "goal_status": goal_result.goal_status,
-            "verification_status": goal_result.verification_status,
-            "readiness": asdict(goal_result.readiness),
-            "iterations": goal_result.iterations,
-            "patched": goal_result.patched,
-            "blockers": goal_result.blockers,
-            "goal_state": str(repo / ".repoforge" / "goal.json"),
-        }, indent=2))
-        raise SystemExit(0 if goal_result.goal_status == "VERIFIED" else 1)
-    if a.command == "inspect":
-        fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(Path(a.out))
-        print(json.dumps({
-            "fingerprint": fp.to_dict(),
-            "findings": [asdict(x) for x in findings],
-            "proposals": [asdict(x) for x in proposals],
-        }, indent=2)); return
-    if a.command == "secrets":
+        result = Orchestrator(config).run()
+        print(
+            json.dumps(
+                {
+                    "goal": "make any given repository deployment-ready",
+                    "goal_id": result.goal_id,
+                    "goal_status": result.goal_status,
+                    "verification_status": result.verification_status,
+                    "readiness": asdict(result.readiness),
+                    "iterations": result.iterations,
+                    "patched": result.patched,
+                    "blockers": result.blockers,
+                    "goal_state": str(repo / ".repoforge" / "goal.json"),
+                },
+                indent=2,
+            )
+        )
+        raise SystemExit(0 if result.goal_status == "VERIFIED" else 1)
+
+    if args.command == "inspect":
+        verification = (
+            RepoForge(repo).verify(120)
+            if args.verify
+            else None
+        )
+        fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(
+            Path(args.out),
+            verification=verification,
+        )
+        print(
+            json.dumps(
+                {
+                    "fingerprint": fp.to_dict(),
+                    "findings": [asdict(item) for item in findings],
+                    "proposals": [asdict(item) for item in proposals],
+                },
+                indent=2,
+            )
+        )
+        if args.verify and verification and verification.release_status.value != "VERIFIED":
+            raise SystemExit(1)
+        return
+
+    if args.command == "secrets":
         secret_findings = scan_secrets(repo)
-        print(json.dumps([asdict(f) for f in secret_findings], indent=2))
+        print(json.dumps([asdict(item) for item in secret_findings], indent=2))
         raise SystemExit(1 if secret_findings else 0)
-    if a.command == "deploy-plan":
-        verification = RepoForge(repo).verify(a.timeout)
+
+    if args.command == "deploy-plan":
+        verification = RepoForge(repo).verify(args.timeout)
         print(json.dumps(asdict(deployment_plan(repo, verification)), indent=2))
         raise SystemExit(0 if verification.release_status.value == "VERIFIED" else 1)
+
     forge = RepoForge(repo)
-    data = forge.fingerprint().to_dict() if a.command == "scan" else forge.verify(a.timeout).to_dict()
+    data = forge.fingerprint().to_dict() if args.command == "scan" else forge.verify(args.timeout).to_dict()
     print(json.dumps(data, indent=2))
-    if a.command != "scan" and data["release_status"] != "VERIFIED":
+    if args.command != "scan" and data["release_status"] != "VERIFIED":
         raise SystemExit(1)
 
 
