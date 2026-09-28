@@ -53,7 +53,14 @@ class SafePatcher:
 
         for patch in patches:
             relative = patch.path.replace("\\", "/")
-            if not relative or relative.startswith("/") or relative.startswith("../") or "/../" in relative:
+            is_windows_absolute = len(relative) >= 2 and relative[1] == ":"
+            if (
+                not relative
+                or relative in {".", ".."}
+                or relative.startswith("/")
+                or relative.startswith("../")
+                or is_windows_absolute
+            ):
                 raise PatchError(f"unsafe patch path: {patch.path}")
             if relative in seen:
                 raise PatchError(f"duplicate patch path: {patch.path}")
@@ -62,7 +69,10 @@ class SafePatcher:
             target = (self.repo / relative).resolve()
             if self.repo not in target.parents:
                 raise PatchError(f"path escapes repository: {patch.path}")
-            if any(part in {".git", ".venv", "venv", "node_modules", ".repoforge"} for part in target.parts):
+            if any(
+                part in {".git", ".venv", "venv", "node_modules", ".repoforge"}
+                for part in target.parts
+            ):
                 raise PatchError(f"protected generated/runtime path: {patch.path}")
             if target.name.endswith(".egg-info"):
                 raise PatchError(f"protected generated path: {patch.path}")
@@ -79,7 +89,9 @@ class SafePatcher:
             if current != patch.expected:
                 raise PatchError(f"precondition mismatch: {patch.path}")
 
-            total_bytes += len(patch.expected.encode("utf-8")) + len(patch.replacement.encode("utf-8"))
+            total_bytes += len(patch.expected.encode("utf-8")) + len(
+                patch.replacement.encode("utf-8")
+            )
             if total_bytes > self.max_patch_bytes:
                 raise PatchError(f"patch set exceeds max_patch_bytes={self.max_patch_bytes}")
 
