@@ -57,9 +57,9 @@ class IndependentReviewer:
         except OSError as exc:
             findings.append(ReviewFinding("high", "git-unavailable", "Could not independently inspect the patch.", str(exc)))
 
-        if not any(item.kind == "failure" for item in evidence.items):
+        if not any(item.kind == "verification" for item in evidence.items):
             findings.append(
-                ReviewFinding("high", "missing-evidence", "Independent reviewer received no verification evidence.", evidence.digest())
+                ReviewFinding("high", "missing-evidence", "Independent reviewer received no final verification evidence.", evidence.digest())
             )
 
         return IndependentReview(
