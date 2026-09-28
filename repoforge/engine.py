@@ -44,15 +44,12 @@ class RepoForge:
             )
             if (self.repo / "pyproject.toml").exists():
                 try:
-                    pyproject = json.loads(
-                        '{"tool":{}}'
-                    )  # TOML parsing is intentionally avoided for Python 3.10 compatibility.
                     pyproject_text = (self.repo / "pyproject.toml").read_text(
                         encoding="utf-8", errors="ignore"
                     )
                     ruff_config = ruff_config or "[tool.ruff" in pyproject_text
                 except OSError:
-                    pyproject = {}
+                    pass
             if ruff_config:
                 checks.append(("python-ruff", [*python_cmd, "-m", "ruff", "check", "."]))
 
