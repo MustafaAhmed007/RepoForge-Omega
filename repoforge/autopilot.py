@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .config import ForgeConfig
-from .diagnostics import DiagnosticFinding
+from .diagnostics import DiagnosticEngine, DiagnosticFinding
 from .engine import RepoForge
 from .memory import MemoryStore
 from .models import VerificationReport
@@ -84,7 +84,9 @@ def _model_patches(
     response = provider.complete(
         ModelRequest(
             "You are a repair agent. Return ONLY JSON patches. Never modify existing tests. Use only supplied evidence.",
-            "Find the smallest production-code change that addresses the observed failure.",
+            "Find the smallest production-code change that addresses the observed failure. "
+            "Respect the current verification state; do not repair already-passing checks or "
+            "weaken tests. Preserve behavior unless the evidence identifies the defect.",
             json.dumps({
                 "findings": [asdict(f) for f in findings],
                 "verification": verification.to_dict(),
@@ -115,14 +117,21 @@ class Autopilot:
         _, findings, proposals = Pipeline(self.config).inspect(verification=baseline)
         planner = RepairPlanner(self.config.repo)
 
-        def provider(rca: RootCauseAnalysis, verification: VerificationReport, evidence: EvidenceBundle) -> list[FilePatch]:
-            deterministic = planner.deterministic_patches(rca, verification, findings)
+        def provider(
+            rca: RootCauseAnalysis,
+            verification: VerificationReport,
+            evidence: EvidenceBundle,
+        ) -> list[FilePatch]:
+            # Recompute diagnostics for the current iteration. The baseline
+            # findings are only used for the public summary counts.
+            _, current_findings = DiagnosticEngine(self.config.repo).run(verification)
+            deterministic = planner.deterministic_patches(rca, verification, current_findings)
             if deterministic:
                 return deterministic
             if patches is not None:
                 return patches
             try:
-                return _model_patches(self.config.repo, findings, verification)
+                return _model_patches(self.config.repo, current_findings, verification)
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 return []
 
@@ -132,17 +141,16 @@ class Autopilot:
         final = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
         readiness = assess(self.config.repo, final)
         changed: list[str] = []
-        rolled_back = False
+        rolled_back = any(attempt.status == "ROLLED_BACK" for attempt in result.attempts)
         for attempt in result.attempts:
             changed.extend(attempt.patches)
-            rolled_back = rolled_back or attempt.status == "ROLLED_BACK"
         if result.verified and result.attempts:
             changed = result.attempts[-1].patches
 
         MemoryStore(self.config.repo / ".repoforge" / "events.jsonl").append(
             "autopilot",
             final.release_status.value,
-            f"{len(findings)} findings",
+            f"{len(findings)} baseline findings",
             f"{len(changed)} files changed; attempts={len(result.attempts)}; rollback={rolled_back}",
         )
         return AutopilotResult(
