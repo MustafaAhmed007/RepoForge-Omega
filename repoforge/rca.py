@@ -22,7 +22,7 @@ class RootCauseAnalysis:
     def primary(self):return max(self.hypotheses,key=lambda h:h.confidence,default=None)
 class RootCauseAnalysisEngine:
     def __init__(self,repo:Path):self.repo=repo.resolve()
-    def analyze(self,verification:VerificationReport,evidence:EvidenceBundle):
+    def analyze(self, verification: VerificationReport, evidence: EvidenceBundle) -> RootCauseAnalysis:
         failures=[c for c in verification.checks if c.status.value in {"FAIL","BLOCKED"}]
         if not failures:return RootCauseAnalysis(evidence.run_id,"No failing deterministic checks.")
         check=failures[0]; output=(check.stdout+"\n"+check.stderr).strip()
@@ -38,8 +38,8 @@ class RootCauseAnalysisEngine:
         for p in sorted(set(affected))[:20]:
             f=(self.repo/p).resolve()
             if f.is_file() and self.repo in f.parents:evidence.add(EvidenceItem("source",p,f.read_text(encoding="utf-8",errors="replace")[:50000],.8))
-        return RootCauseAnalysis(evidence.run_id,f"{check.name} failed",hs,sorted(set(affected)),[check.name],max((h.confidence for h in hs),default=0))
-    def _find_symbol(self,symbol):
+        return RootCauseAnalysis(evidence.run_id,f"{check.name} failed",hs,sorted(set(affected)),[check.name],max((h.confidence for h in hs), default=0.0))
+    def _find_symbol(self, symbol: str) -> list[str]:
         out=[]
         for p in self.repo.rglob("*.py"):
             if any(x in {".git",".venv","venv",".repoforge","__pycache__"} for x in p.parts):continue
