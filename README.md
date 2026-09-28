@@ -364,6 +364,55 @@ C:\path\to\target-repository\.repoforge-venv\Scripts\repoforge.exe inspect C:\pa
 
 The installer creates an isolated `.repoforge-venv` and does not replace the target project's runtime.
 
+## External-repository runtime isolation
+
+When RepoForge verifies another Python repository, it first looks for that repository's own virtual environment:
+
+```text
+<target>/.venv/Scripts/python.exe
+<target>/venv/Scripts/python.exe
+<target>/.venv/bin/python
+<target>/venv/bin/python
+```
+
+If one is found, deterministic Python checks run inside that target environment rather than inside RepoForge's environment. If none is found, RepoForge falls back to its own interpreter and records that limitation in the verification recommendations.
+
+For Node projects, the verifier selects the package-manager runner from `pnpm-lock.yaml`, `yarn.lock`, or `package-lock.json`.
+
+RepoForge also discovers project-declared deterministic checks such as:
+
+- Python tests
+- Python compilation
+- Ruff when a Ruff configuration is present
+- `benchmarks/run.py` benchmark suites
+- Node lint/typecheck/test/build scripts
+- Go test/build
+- Rust check/test
+
+Use verification-aware inspection when you want diagnostics to include actual failing-check evidence:
+
+```bash
+repoforge inspect . --verify
+```
+
+`VERIFIED` is never inferred from static inspection alone.
+
+## Autonomous repair safety boundaries
+
+Autonomous repair is bounded by default:
+
+- maximum changed files: 5
+- maximum patch payload: 100 KB
+- exact precondition matching
+- repository-bound paths only
+- absolute Windows paths rejected
+- generated/runtime directories protected
+- existing test files protected from mutation
+- pre-existing Git changes on a patch target are rejected unless explicitly allowed
+- failed verification triggers transaction rollback
+
+Use `--allow-dirty-files` only when you intentionally want RepoForge to modify files that already have local Git changes.
+
 ## CLI
 
 ```bash
