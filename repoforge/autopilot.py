@@ -15,7 +15,7 @@ from .pipeline import Pipeline
 from .providers import ModelRequest, provider_from_environment
 from .readiness import Readiness, assess
 from .repair import RepairPlanner
-from .repair_loop import RepairLoop
+from .repair_loop import RepairLoop\nfrom .rca import RootCauseAnalysis\nfrom .evidence import EvidenceBundle
 
 
 @dataclass(slots=True)
@@ -113,7 +113,7 @@ class Autopilot:
         _, findings, proposals = Pipeline(self.config).inspect(verification=baseline)
         planner = RepairPlanner(self.config.repo)
 
-        def provider(rca: object, verification: VerificationReport, evidence: object) -> list[FilePatch]:
+        def provider(rca: RootCauseAnalysis, verification: VerificationReport, evidence: EvidenceBundle) -> list[FilePatch]:
             deterministic = planner.deterministic_patches(findings)
             if deterministic:
                 return deterministic
