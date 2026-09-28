@@ -27,21 +27,26 @@ class RepairTransaction:
         )
         self._backup: Path | None = None
         self._touched: list[Path] = []
+        self._originals: set[Path] = set()
 
     def apply(self, patches: list[FilePatch]) -> list[str]:
         if not patches:
             return []
 
         self.patcher.apply(patches, dry_run=True)
-        self._backup = Path(tempfile.mkdtemp(prefix="repoforge-backup-"))
+        if self._backup is None:
+            self._backup = Path(tempfile.mkdtemp(prefix="repoforge-backup-"))
 
         for patch in patches:
             target = (self.repo / patch.path).resolve()
-            if target.exists():
-                backup = self._backup / patch.path
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(target, backup)
-            self._touched.append(target)
+            if target not in self._originals:
+                if target.exists():
+                    backup = self._backup / patch.path
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(target, backup)
+                self._originals.add(target)
+            if target not in self._touched:
+                self._touched.append(target)
 
         try:
             return self.patcher.apply(patches, dry_run=False)
@@ -58,15 +63,17 @@ class RepairTransaction:
             if backup.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(backup, target)
-            elif target.exists():
+            elif target.exists() and target in self._originals:
                 target.unlink()
 
         shutil.rmtree(self._backup, ignore_errors=True)
         self._backup = None
         self._touched.clear()
+        self._originals.clear()
 
     def commit(self) -> None:
         if self._backup is not None:
             shutil.rmtree(self._backup, ignore_errors=True)
             self._backup = None
         self._touched.clear()
+        self._originals.clear()
