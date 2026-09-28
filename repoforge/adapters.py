@@ -16,8 +16,8 @@ class ProjectAdapter(Protocol):
     def dependency_install(self,repo:Path)->list[str]|None:...
 class PythonAdapter:
     name="python"
-    def matches(self,r):return any((r/x).exists() for x in ("pyproject.toml","requirements.txt","setup.py")) or (r/"tests").is_dir() or any(r.glob("*.py"))
-    def checks(self,r):
+    def matches(self, repo: Path) -> bool:return any((r/x).exists() for x in ("pyproject.toml","requirements.txt","setup.py")) or (r/"tests").is_dir() or any(r.glob("*.py"))
+    def checks(self, repo: Path) -> list[CheckSpec]:
         py,_=discover_python(r); c=[]
         if (r/"tests").is_dir() or (r/"pytest.ini").exists():c.append(CheckSpec("python-tests",[ *py,"-m","pytest"]))
         if (r/"pyproject.toml").exists() or any(r.glob("*.py")) or (r/"tests").is_dir():c.append(CheckSpec("python-compile",[ *py,"-m","compileall","-q","."]))
@@ -27,7 +27,7 @@ class PythonAdapter:
             if has:c.append(CheckSpec("python-ruff",[ *py,"-m","ruff","check","."]))
         if (r/"benchmarks"/"run.py").exists():c.append(CheckSpec("python-benchmarks",[ *py,"-m","benchmarks.run"]))
         return c
-    def dependency_install(self,r):
+    def dependency_install(self, repo: Path) -> list[str] | None:
         py,_=discover_python(r)
         return [*py,"-m","pip","install","-e",".[dev]"] if (r/"pyproject.toml").exists() else ([*py,"-m","pip","install","-r","requirements.txt"] if (r/"requirements.txt").exists() else None)
 class NodeAdapter:
@@ -78,9 +78,10 @@ class MakeAdapter:
         return None
 
 ADAPTERS=(PythonAdapter(),NodeAdapter(),GoAdapter(),RustAdapter(),JavaAdapter(),DotNetAdapter(),MakeAdapter())
-def adapters_for(repo):return [a for a in ADAPTERS if a.matches(repo)]
-def discover_checks(repo):
-    out=[];seen=set()
+def adapters_for(repo: Path) -> list[ProjectAdapter]:return [a for a in ADAPTERS if a.matches(repo)]
+def discover_checks(repo: Path) -> list[CheckSpec]:
+    out: list[CheckSpec] = []
+    seen: set[str] = set()
     for a in adapters_for(repo):
         for c in a.checks(repo):
             if c.name not in seen:out.append(c);seen.add(c.name)
