@@ -25,6 +25,9 @@ class RepairTransaction:
             max_patch_bytes=max_patch_bytes,
             allow_dirty_files=allow_dirty_files,
         )
+        self.max_files = max_files
+        self.max_patch_bytes = max_patch_bytes
+        self._patch_bytes = 0
         self._backup: Path | None = None
         self._touched: list[Path] = []
         self._originals: set[Path] = set()
@@ -32,6 +35,30 @@ class RepairTransaction:
     def apply(self, patches: list[FilePatch]) -> list[str]:
         if not patches:
             return []
+
+        new_paths = {
+            patch.path.replace("\\", "/")
+            for patch in patches
+            if (self.repo / patch.path).resolve() not in self._originals
+        }
+        total_paths = {
+            str(path.relative_to(self.repo)).replace("\\", "/")
+            for path in self._touched
+        } | new_paths
+        if len(total_paths) > self.max_files:
+            raise RuntimeError(
+                f"cumulative repair exceeds max_files={self.max_files}"
+            )
+
+        patch_bytes = sum(
+            len(patch.expected.encode("utf-8"))
+            + len(patch.replacement.encode("utf-8"))
+            for patch in patches
+        )
+        if self._patch_bytes + patch_bytes > self.max_patch_bytes:
+            raise RuntimeError(
+                f"cumulative repair exceeds max_patch_bytes={self.max_patch_bytes}"
+            )
 
         self.patcher.apply(patches, dry_run=True)
         if self._backup is None:
@@ -49,7 +76,9 @@ class RepairTransaction:
                 self._touched.append(target)
 
         try:
-            return self.patcher.apply(patches, dry_run=False)
+            changed = self.patcher.apply(patches, dry_run=False)
+            self._patch_bytes += patch_bytes
+            return changed
         except Exception:
             self.rollback()
             raise
@@ -70,6 +99,7 @@ class RepairTransaction:
         self._backup = None
         self._touched.clear()
         self._originals.clear()
+        self._patch_bytes = 0
 
     def commit(self) -> None:
         if self._backup is not None:
@@ -77,3 +107,4 @@ class RepairTransaction:
             self._backup = None
         self._touched.clear()
         self._originals.clear()
+        self._patch_bytes = 0
