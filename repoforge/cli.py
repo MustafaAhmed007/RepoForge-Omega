@@ -112,9 +112,9 @@ def main() -> None:
                 {
                     "findings": result.findings,
                     "proposals": result.proposals,
-                    "patched": goal_result.patched,
-                    "verification_status": goal_result.verification_status,
-                    "readiness": asdict(goal_result.readiness),
+                    "patched": result.patched,
+                    "verification_status": result.verification_status,
+                    "readiness": asdict(result.readiness),
                     "rolled_back": result.rolled_back,
                 },
                 indent=2,
