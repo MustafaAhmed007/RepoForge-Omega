@@ -63,7 +63,21 @@ class DotNetAdapter:
     def matches(self,r):return any(r.glob("*.sln")) or any(r.glob("*.csproj"))
     def checks(self,r):return [CheckSpec("dotnet-test",["dotnet","test"]),CheckSpec("dotnet-build",["dotnet","build","--no-restore"])]
     def dependency_install(self,r):return ["dotnet","restore"]
-ADAPTERS=(PythonAdapter(),NodeAdapter(),GoAdapter(),RustAdapter(),JavaAdapter(),DotNetAdapter())
+class MakeAdapter:
+    name = "make"
+    def matches(self, repo: Path) -> bool:
+        return (repo / "Makefile").exists()
+    def checks(self, repo: Path) -> list[CheckSpec]:
+        text = (repo / "Makefile").read_text(encoding="utf-8", errors="replace")
+        targets = []
+        for target in ("test", "check", "lint", "build"):
+            if f"{target}:" in text:
+                targets.append(CheckSpec(f"make-{target}", ["make", target]))
+        return targets
+    def dependency_install(self, repo: Path) -> list[str] | None:
+        return None
+
+ADAPTERS=(PythonAdapter(),NodeAdapter(),GoAdapter(),RustAdapter(),JavaAdapter(),DotNetAdapter(),MakeAdapter())
 def adapters_for(repo):return [a for a in ADAPTERS if a.matches(repo)]
 def discover_checks(repo):
     out=[];seen=set()
