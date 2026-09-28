@@ -15,7 +15,7 @@ from .pipeline import Pipeline
 from .providers import ModelRequest, provider_from_environment
 from .readiness import Readiness, assess
 from .repair import RepairPlanner
-from .transaction import RepairTransaction
+from .repair_loop import RepairLoop
 
 
 @dataclass(slots=True)
@@ -42,46 +42,6 @@ def _failure_paths(verification: VerificationReport) -> list[str]:
     return paths
 
 
-def _model_context(
-    repo: Path,
-    findings: list[DiagnosticFinding],
-    verification: VerificationReport,
-) -> dict[str, str]:
-    relevant: dict[str, str] = {}
-    paths = _failure_paths(verification)
-
-    for candidate in (
-        "pyproject.toml",
-        "package.json",
-        "main.py",
-        "src/index.ts",
-        "src/index.js",
-        *paths,
-    ):
-        path = repo / candidate
-        if path.is_file() and candidate not in relevant:
-            content = path.read_text(encoding="utf-8", errors="replace")
-            if len(content) <= 30_000:
-                relevant[candidate] = content
-
-    if any(f.code == "TEST_FAILURE" for f in findings):
-        for root in (repo / "adaptive_rag", repo / "src", repo / "tests"):
-            if not root.is_dir():
-                continue
-            for path in sorted(root.rglob("*.py")):
-                relative = str(path.relative_to(repo)).replace("\\", "/")
-                if relative in relevant:
-                    continue
-                content = path.read_text(encoding="utf-8", errors="replace")
-                if len(content) > 20_000:
-                    continue
-                if sum(len(value) for value in relevant.values()) + len(content) > 100_000:
-                    break
-                relevant[relative] = content
-
-    return relevant
-
-
 def _model_patches(
     repo: Path,
     findings: list[DiagnosticFinding],
@@ -91,59 +51,56 @@ def _model_patches(
     if getattr(provider, "name", "disabled") == "disabled" or not findings:
         return []
 
-    context = _model_context(repo, findings, verification)
+    relevant: dict[str, str] = {}
+    paths = _failure_paths(verification)
+    candidates = (
+        "pyproject.toml",
+        "package.json",
+        "main.py",
+        "src/index.ts",
+        "src/index.js",
+        *paths,
+    )
+    for candidate in candidates:
+        path = repo / candidate
+        if path.is_file():
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if len(text) <= 30_000:
+                relevant[candidate] = text
+
+    for root in (repo / "tests", repo / "adaptive_rag", repo / "src"):
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            relative = str(path.relative_to(repo)).replace("\\", "/")
+            if relative in relevant:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if len(text) <= 20_000 and sum(map(len, relevant.values())) + len(text) <= 100_000:
+                relevant[relative] = text
+
     response = provider.complete(
         ModelRequest(
-            system=(
-                "Return ONLY JSON with a patches array. Each patch must contain path, expected, replacement. "
-                "Use only evidence in the supplied repository context. Never use commands, secrets, or destructive operations. "
-                "Do not modify existing tests merely to make them pass. Prefer the smallest production-code fix that addresses "
-                "the observed failure. Keep changes bounded and compatible with the detected project."
-            ),
-            prompt=(
-                "Diagnose the supplied findings and propose minimal patches. "
-                "For TEST_FAILURE, preserve the existing test contract and repair the implementation rather than weakening the test."
-            ),
-            context=json.dumps(
-                {
-                    "findings": [
-                        {
-                            "code": f.code,
-                            "severity": f.severity,
-                            "message": f.message,
-                            "evidence": f.evidence,
-                        }
-                        for f in findings
-                    ],
-                    "verification": verification.to_dict(),
-                    "files": context,
-                }
-            ),
+            "You are a repair agent. Return ONLY JSON patches. Never modify existing tests. Use only supplied evidence.",
+            "Find the smallest production-code change that addresses the observed failure.",
+            json.dumps({
+                "findings": [vars(f) for f in findings],
+                "verification": verification.to_dict(),
+                "files": relevant,
+            }),
         )
     )
-
     try:
         data = json.loads(response.text)
     except (json.JSONDecodeError, TypeError):
         return []
 
-    raw_patches = data.get("patches", []) if isinstance(data, dict) else []
-    if not isinstance(raw_patches, list):
-        return []
-
     patches: list[FilePatch] = []
-    for patch in raw_patches:
-        if not isinstance(patch, dict):
-            continue
-        if not all(key in patch for key in ("path", "expected", "replacement")):
-            continue
-        patches.append(
-            FilePatch(
-                str(patch["path"]),
-                str(patch["expected"]),
-                str(patch["replacement"]),
+    for item in data.get("patches", []) if isinstance(data, dict) else []:
+        if isinstance(item, dict) and all(k in item for k in ("path", "expected", "replacement")):
+            patches.append(
+                FilePatch(str(item["path"]), str(item["expected"]), str(item["replacement"]))
             )
-        )
     return patches
 
 
@@ -155,64 +112,44 @@ class Autopilot:
         baseline = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
         _, findings, proposals = Pipeline(self.config).inspect(verification=baseline)
         planner = RepairPlanner(self.config.repo)
-        candidate_patches = (
-            patches if patches is not None else planner.deterministic_patches(findings)
-        )
 
-        if not candidate_patches and findings:
+        def provider(rca, verification, evidence):
+            deterministic = planner.deterministic_patches(findings)
+            if deterministic:
+                return deterministic
+            if patches is not None:
+                return patches
             try:
-                candidate_patches = _model_patches(self.config.repo, findings, baseline)
+                return _model_patches(self.config.repo, findings, verification)
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
-                MemoryStore(self.config.repo / ".repoforge" / "events.jsonl").append(
-                    "model",
-                    "error",
-                    "model patch generation failed",
-                    "model repair skipped",
-                )
+                return []
 
-        patched: list[str] = []
-        rolled_back = False
-        if candidate_patches and not self.config.dry_run:
-            transaction = RepairTransaction(
-                self.config.repo,
-                max_files=self.config.max_files_changed,
-                max_patch_bytes=self.config.max_patch_bytes,
-                allow_dirty_files=self.config.allow_dirty_files,
-            )
-            try:
-                patched = transaction.apply(candidate_patches)
-                verification = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
-                if verification.release_status.value != "VERIFIED":
-                    transaction.rollback()
-                    rolled_back = True
-                    patched = []
-                else:
-                    transaction.commit()
-            except Exception:
-                transaction.rollback()
-                rolled_back = True
-        elif candidate_patches:
-            SafePatcher(
-                self.config.repo,
-                max_files=self.config.max_files_changed,
-                max_patch_bytes=self.config.max_patch_bytes,
-                allow_dirty_files=self.config.allow_dirty_files,
-            ).apply(candidate_patches, dry_run=True)
+        loop = RepairLoop(self.config)
+        result = loop.run(provider)
 
-        verification = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
+        final = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
         readiness = assess(self.config.repo)
+        changed: list[str] = []
+        rolled_back = False
+        for attempt in result.attempts:
+            changed.extend(attempt.patches)
+            rolled_back = rolled_back or attempt.status == "ROLLED_BACK"
+        if result.verified and result.attempts:
+            # Only the successful attempt remains as a committed mutation.
+            changed = result.attempts[-1].patches
+
         MemoryStore(self.config.repo / ".repoforge" / "events.jsonl").append(
             "autopilot",
-            verification.release_status.value,
+            final.release_status.value,
             f"{len(findings)} findings",
-            f"{len(patched)} patches applied; rollback={rolled_back}",
+            f"{len(changed)} files changed; attempts={len(result.attempts)}; rollback={rolled_back}",
         )
         return AutopilotResult(
             len(findings),
             len(proposals),
-            patched,
-            verification.release_status.value,
+            changed if result.verified else [],
+            final.release_status.value,
             readiness,
             rolled_back,
-            1,
+            len(result.attempts) or 1,
         )
