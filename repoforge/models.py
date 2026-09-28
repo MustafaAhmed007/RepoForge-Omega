@@ -2,11 +2,19 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+
 class GateStatus(str, Enum):
-    PASS='PASS'; FAIL='FAIL'; SKIP='SKIP'; BLOCKED='BLOCKED'
+    PASS = "PASS"
+    FAIL = "FAIL"
+    SKIP = "SKIP"
+    BLOCKED = "BLOCKED"
+
 
 class ReleaseStatus(str, Enum):
-    VERIFIED='VERIFIED'; NOT_VERIFIED='NOT VERIFIED'; BLOCKED='BLOCKED'
+    VERIFIED = "VERIFIED"
+    NOT_VERIFIED = "NOT VERIFIED"
+    BLOCKED = "BLOCKED"
+
 
 @dataclass(slots=True)
 class CheckResult:
@@ -14,13 +22,17 @@ class CheckResult:
     status: GateStatus
     exit_code: int | None
     duration_ms: int
-    stdout: str = ''
-    stderr: str = ''
+    stdout: str = ""
+    stderr: str = ""
     command: list[str] = field(default_factory=list)
     reason: str | None = None
+    required: bool = True
 
     def to_dict(self) -> dict[str, Any]:
-        data=asdict(self); data['status']=self.status.value; return data
+        data = asdict(self)
+        data["status"] = self.status.value
+        return data
+
 
 @dataclass(slots=True)
 class RepositoryFingerprint:
@@ -37,8 +49,11 @@ class RepositoryFingerprint:
     git_commit: str | None
     file_count: int
     total_bytes: int
+    runtime: dict[str, str] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]: return asdict(self)
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
 
 @dataclass(slots=True)
 class VerificationReport:
@@ -50,4 +65,11 @@ class VerificationReport:
     execution_id: str
 
     def to_dict(self) -> dict[str, Any]:
-        return {'execution_id':self.execution_id,'fingerprint':self.fingerprint.to_dict(),'checks':[c.to_dict() for c in self.checks],'release_status':self.release_status.value,'blockers':self.blockers,'recommendations':self.recommendations}
+        return {
+            "execution_id": self.execution_id,
+            "fingerprint": self.fingerprint.to_dict(),
+            "checks": [c.to_dict() for c in self.checks],
+            "release_status": self.release_status.value,
+            "blockers": self.blockers,
+            "recommendations": self.recommendations,
+        }

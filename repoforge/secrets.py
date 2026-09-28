@@ -22,15 +22,33 @@ PATTERNS = (
         ),
     ),
 )
-SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "dist", "build", "__pycache__"}
+SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".repoforge",
+}
 
 
 def scan(repo: Path) -> list[SecretFinding]:
     repo = repo.resolve()
     findings: list[SecretFinding] = []
     for path in repo.rglob("*"):
-        if not path.is_file() or any(part in SKIP_DIRS for part in path.parts):
+        if (
+            not path.is_file()
+            or any(part in SKIP_DIRS for part in path.parts)
+            or any(part.endswith(".egg-info") for part in path.parts)
+        ):
             continue
+
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -39,5 +57,7 @@ def scan(repo: Path) -> list[SecretFinding]:
         for number, line in enumerate(text.splitlines(), 1):
             for kind, pattern in PATTERNS:
                 if pattern.search(line):
-                    findings.append(SecretFinding(str(path.relative_to(repo)), number, kind))
+                    findings.append(
+                        SecretFinding(str(path.relative_to(repo)), number, kind)
+                    )
     return findings

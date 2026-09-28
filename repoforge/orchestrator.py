@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from .autopilot import Autopilot
 from .config import ForgeConfig
+from .engine import RepoForge
 from .goals import GoalRunner
 from .hooks import HookBus
 from .models import ReleaseStatus
@@ -36,9 +37,14 @@ class Orchestrator:
         goal.start()
         self.hooks.emit("session_start", goal=goal.goal.id, repo=str(self.config.repo))
 
-        _, findings, proposals = Pipeline(self.config).inspect()
+        baseline = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
+        _, findings, proposals = Pipeline(self.config).inspect(verification=baseline)
         goal.record_task("discover", TaskStatus.PASSED, ["repository fingerprint collected"])
-        goal.record_task("diagnose", TaskStatus.PASSED, [f"{len(findings)} findings collected"])
+        goal.record_task(
+            "diagnose",
+            TaskStatus.PASSED,
+            [f"{len(findings)} findings collected"],
+        )
         self.hooks.emit("after_task", task="diagnose", findings=len(findings))
 
         goal.record_task(
@@ -50,9 +56,17 @@ class Orchestrator:
         self.hooks.emit("before_task", task="repair")
         result = Autopilot(self.config).run()
         if result.rolled_back:
-            goal.record_task("repair", TaskStatus.FAILED, ["repair verification failed; transaction rolled back"])
+            goal.record_task(
+                "repair",
+                TaskStatus.FAILED,
+                ["repair verification failed; transaction rolled back"],
+            )
         elif result.patched:
-            goal.record_task("repair", TaskStatus.PASSED, [f"{len(result.patched)} files changed"])
+            goal.record_task(
+                "repair",
+                TaskStatus.PASSED,
+                [f"{len(result.patched)} files changed"],
+            )
         else:
             goal.record_task("repair", TaskStatus.SKIPPED, ["no repository mutation required"])
 
@@ -63,9 +77,15 @@ class Orchestrator:
             [f"verification status={result.verification_status}"],
         )
 
-        # Review is an independent post-run diagnostic pass, not a relabeling of verification.
-        _, review_findings, _ = Pipeline(self.config).inspect()
-        review_blockers = [f.code for f in review_findings if f.severity == "high"]
+        final_verification = RepoForge(self.config.repo).verify(self.config.timeout_seconds)
+        _, review_findings, _ = Pipeline(self.config).inspect(
+            verification=final_verification
+        )
+        review_blockers = [
+            finding.code
+            for finding in review_findings
+            if finding.severity == "high"
+        ]
         review_ok = not review_blockers
         goal.record_task(
             "review",

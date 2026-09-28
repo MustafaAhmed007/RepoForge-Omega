@@ -1,33 +1,67 @@
 from __future__ import annotations
-import json,sys,uuid
+
+import uuid
 from pathlib import Path
+
+from .adapters import discover_checks
 from .fingerprint import detect
-from .models import CheckResult,GateStatus,ReleaseStatus,VerificationReport,RepositoryFingerprint
+from .models import CheckResult, GateStatus, ReleaseStatus, RepositoryFingerprint, VerificationReport
 from .runner import run_check
 
+
 class RepoForge:
-    def __init__(self,repo:Path)->None: self.repo=repo.resolve()
-    def fingerprint(self)->RepositoryFingerprint: return detect(self.repo)
-    def discover_checks(self)->list[tuple[str,list[str]]]:
-        fp=self.fingerprint(); checks:list[tuple[str,list[str]]]=[]
-        if 'Python' in fp.languages:
-            if (self.repo/'tests').is_dir() or (self.repo/'pytest.ini').exists(): checks.append(('python-tests',[sys.executable,'-m','pytest']))
-            if (self.repo/'pyproject.toml').exists(): checks.append(('python-compile',[sys.executable,'-m','compileall','-q','.']))
-        if 'JavaScript' in fp.languages or 'TypeScript' in fp.languages:
-            pkg=self.repo/'package.json'
-            if pkg.exists():
-                try:scripts=json.loads(pkg.read_text(encoding='utf-8')).get('scripts',{})
-                except (OSError,json.JSONDecodeError): scripts={}
-                for key,cmd in (('lint',['npm','run','lint']),('typecheck',['npm','run','typecheck']),('test',['npm','test']),('build',['npm','run','build'])):
-                    if key in scripts: checks.append((f'npm-{key}',cmd))
-        if 'Go' in fp.languages and (self.repo/'go.mod').exists(): checks += [('go-test',['go','test','./...']),('go-build',['go','build','./...'])]
-        if 'Rust' in fp.languages and (self.repo/'Cargo.toml').exists(): checks += [('cargo-check',['cargo','check']),('cargo-test',['cargo','test'])]
-        return checks
-    def verify(self,timeout_s:int=120)->VerificationReport:
-        fp=self.fingerprint(); checks=[run_check(n,c,self.repo,timeout_s) for n,c in self.discover_checks()]
-        if not checks: checks=[CheckResult('verification',GateStatus.BLOCKED,None,0,reason='no deterministic verification commands discovered')]
-        blockers=[c.name for c in checks if c.status in {GateStatus.FAIL,GateStatus.BLOCKED}]
-        status=ReleaseStatus.BLOCKED if any(c.status==GateStatus.BLOCKED for c in checks) else ReleaseStatus.NOT_VERIFIED if blockers else ReleaseStatus.VERIFIED
-        rec:list[str]=[]
-        if not fp.test_systems: rec.append('Add deterministic tests appropriate to the detected application.')
-        return VerificationReport(fp,checks,status,blockers,rec,uuid.uuid4().hex)
+    def __init__(self, repo: Path) -> None:
+        self.repo = repo.resolve()
+
+    def fingerprint(self) -> RepositoryFingerprint:
+        return detect(self.repo)
+
+    def discover_checks(self) -> list[tuple[str, list[str]]]:
+        return [(check.name, check.command) for check in discover_checks(self.repo)]
+
+    def verify(self, timeout_s: int = 120) -> VerificationReport:
+        fp = self.fingerprint()
+        specs = discover_checks(self.repo)
+        checks = []
+        for spec in specs:
+            result = run_check(spec.name, spec.command, self.repo, timeout_s, required=spec.required)
+            checks.append(result)
+
+        if not checks:
+            checks = [
+                CheckResult(
+                    "verification",
+                    GateStatus.BLOCKED,
+                    None,
+                    0,
+                    reason="no deterministic verification commands discovered",
+                )
+            ]
+
+        blockers = [
+            c.name
+            for c in checks
+            if c.required and c.status in {GateStatus.FAIL, GateStatus.BLOCKED}
+        ]
+        if any(c.required and c.status == GateStatus.BLOCKED for c in checks):
+            status = ReleaseStatus.BLOCKED
+        elif blockers:
+            status = ReleaseStatus.NOT_VERIFIED
+        else:
+            status = ReleaseStatus.VERIFIED
+
+        recommendations: list[str] = []
+        if not fp.test_systems:
+            recommendations.append("Add deterministic tests appropriate to the detected application.")
+        if fp.runtime.get("python_source") == "repoforge-runtime":
+            recommendations.append(
+                "No target Python virtual environment was detected; verification used RepoForge's interpreter."
+            )
+        optional_blocked = [
+            c.name for c in checks if not c.required and c.status == GateStatus.BLOCKED
+        ]
+        if optional_blocked:
+            recommendations.append(
+                "Optional checks unavailable: " + ", ".join(optional_blocked)
+            )
+        return VerificationReport(fp, checks, status, blockers, recommendations, uuid.uuid4().hex)

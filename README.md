@@ -282,7 +282,7 @@ RepoForge-Omega/
 | `deploy.py` | Produces deployment plans |
 | `policy.py` | Controls what RepoForge is allowed to do |
 | `config.py` | Loads runtime configuration |
-| `bootstrap.py` | Installs/initializes RepoForge in target repositories |
+| `bootstrap.py` | Installs/initializes RepoForge in target repositories |\n| `adapters.py` | Discovers ecosystem-appropriate deterministic checks |\n| `evidence.py` | Builds auditable evidence bundles and digests |\n| `rca.py` | Maps deterministic failures to structured RCA hypotheses |\n| `repair_loop.py` | Runs bounded repair, verification, review, and rollback |\n| `sandbox.py` | Provides temporary-workspace and optional Docker isolation |\n| `dependencies.py` | Plans dependency installation without silent target mutation |\n| `dependency_graph.py` | Builds Python import dependency graphs |\n| `ci.py` | Discovers CI workflow checks |\n| `mcp_client.py` | Provides minimal JSON-RPC stdio integration |\n| `observability.py` | Records trace/span execution evidence |\n| `deployment.py` | Applies explicit deployment execution gates |
 
 ## Design contract
 
@@ -302,9 +302,9 @@ Regression verification
 Release gate
 ```
 
-## End-to-end pipeline
+## Universal engineering v1\n\nThe v1 engineering layer is adapter-driven: RepoForge fingerprints the target repository, selects applicable ecosystem adapters, discovers deterministic checks, and runs only checks supported by the detected project structure.\n\n```text\nTARGET REPOSITORY → DISCOVERY / FINGERPRINT → ADAPTER SELECTION\n                                      ↓\n                         DETERMINISTIC CHECKS\n                                      ↓\n                                   EVIDENCE\n```\n\nCurrent adapter coverage includes Python, Node/TypeScript, Go, Rust, Java, .NET, and Makefile-driven projects. This is implemented/initial coverage, not a claim of universal support for every language, framework, package manager, or build system.\n\n### Root-cause analysis\n\nWhen verification fails, RepoForge can convert deterministic failure output into structured RCA hypotheses instead of treating an AI explanation as fact.\n\n```text\nVERIFICATION FAILURE → PARSE → CLASSIFY → MAP TEST/SYMBOL\n                                      ↓\n                              MAP SOURCE CANDIDATES\n                                      ↓\n                              COLLECT EVIDENCE\n                                      ↓\n                                RCA HYPOTHESIS\n                                      ↓\n                              REPAIR CANDIDATE\n```\n\nRCA output is hypothesis-level evidence. A hypothesis becomes actionable only through controlled change and subsequent deterministic verification.\n\n### Evidence bundles\n\nRepair and review stages can consume structured evidence containing failure information, command results, relevant source evidence, changed-file information, and an evidence digest. This preserves an auditable chain between observation, proposed repair, and verification.\n\n### Bounded repair loop\n\n```text\nBASELINE VERIFY → RCA → PATCH CANDIDATE → TRANSACTION / DRY RUN\n                                      ↓\n                         POST-REPAIR VERIFY\n                                      ↓\n                         POST-REPAIR EVIDENCE\n                                      ↓\n                         INDEPENDENT REVIEW\n                                      ↓\n                              COMMIT / ROLLBACK\n```\n\nThe repair loop is bounded by maximum attempts, changed-file and patch-size limits, exact preconditions, repository-bound paths, protected runtime/generated areas, existing-test protection, dirty-file policy, and rollback on failed verification.\n\n### Independent review gate\n\nVerification and review are separate responsibilities. The deterministic reviewer checks conditions such as test mutation, diff hygiene, and verification evidence. An optional model reviewer can provide an additional evidence-based assessment.\n\nRepair and review providers can be configured by role. True model independence in production requires a genuinely separate provider/model/credential for the review role; two role names alone do not create independence.\n\n### Current capability boundary\n\n| Capability | Status |\n|---|---|\n| Runtime-aware deterministic verification | Implemented |\n| Python adapter | Implemented |\n| Node/TypeScript adapter | Implemented |\n| Go adapter | Implemented |\n| Rust adapter | Implemented |\n| Java adapter | Initial implementation |\n| .NET adapter | Initial implementation |\n| Makefile adapter | Implemented |\n| Deterministic RCA | Implemented |\n| Bounded transactional repair | Implemented |\n| Independent deterministic review | Implemented |\n| Optional model review | Implemented; production separation is configuration-dependent |\n| Docker execution sandbox | Implemented as an optional stronger boundary |\n| Full MCP protocol lifecycle | Not claimed; current implementation is a minimal JSON-RPC stdio client/boundary |\n| Universal language/build-system coverage | Not claimed |\n| Full CI/CD remediation across providers | Not claimed |\n| Production deployment automation | Limited and explicitly gated |\n\n## End-to-end pipeline
 
-`DISCOVER -> FINGERPRINT -> DIAGNOSE -> PLAN -> REPAIR -> REGRESSION -> VERIFY -> READINESS -> REPORT`
+`DISCOVER -> FINGERPRINT -> ADAPT -> DIAGNOSE -> RCA -> PLAN -> REPAIR -> REGRESSION -> REVIEW -> VERIFY -> READINESS -> REPORT`
 
 The implementation includes repository fingerprinting, diagnostics, secret scanning, safe command execution, deterministic verification, repair planning, transactional rollback, optional OpenAI-compatible model assistance, persistent event memory, deployment planning, reports, CI, package builds, and cross-platform bootstrap scripts.
 
@@ -364,6 +364,55 @@ C:\path\to\target-repository\.repoforge-venv\Scripts\repoforge.exe inspect C:\pa
 
 The installer creates an isolated `.repoforge-venv` and does not replace the target project's runtime.
 
+## External-repository runtime isolation
+
+When RepoForge verifies another Python repository, it first looks for that repository's own virtual environment:
+
+```text
+<target>/.venv/Scripts/python.exe
+<target>/venv/Scripts/python.exe
+<target>/.venv/bin/python
+<target>/venv/bin/python
+```
+
+If one is found, deterministic Python checks run inside that target environment rather than inside RepoForge's environment. If none is found, RepoForge falls back to its own interpreter and records that limitation in the verification recommendations.
+
+For Node projects, the verifier selects the package-manager runner from `pnpm-lock.yaml`, `yarn.lock`, or `package-lock.json`.
+
+RepoForge also discovers project-declared deterministic checks such as:
+
+- Python tests
+- Python compilation
+- Ruff when a Ruff configuration is present
+- `benchmarks/run.py` benchmark suites
+- Node lint/typecheck/test/build scripts
+- Go test/build
+- Rust check/test
+
+Use verification-aware inspection when you want diagnostics to include actual failing-check evidence:
+
+```bash
+repoforge inspect . --verify
+```
+
+`VERIFIED` is never inferred from static inspection alone.
+
+## Autonomous repair safety boundaries
+
+Autonomous repair is bounded by default:
+
+- maximum changed files: 5
+- maximum patch payload: 100 KB
+- exact precondition matching
+- repository-bound paths only
+- absolute Windows paths rejected
+- generated/runtime directories protected
+- existing test files protected from mutation
+- pre-existing Git changes on a patch target are rejected unless explicitly allowed
+- failed verification triggers transaction rollback
+
+Use `--allow-dirty-files` only when you intentionally want RepoForge to modify files that already have local Git changes.
+
 ## CLI
 
 ```bash
@@ -394,7 +443,7 @@ Model-generated patches are constrained to exact `expected -> replacement` file 
 
 The provider layer is intentionally replaceable so future deployments can use compatible hosted APIs, local models, or organization-specific inference gateways without rewriting the core engineering pipeline.
 
-## Safety model
+## Sandbox and execution boundary\n\nRepoForge's workspace sandbox creates a temporary copy of the target repository for isolated operations while excluding Git metadata, virtual environments, dependency caches, and other runtime/generated material. This protects the original working tree from ordinary sandboxed operations, but it is not equivalent to OS-level isolation.\n\nAn optional Docker sandbox provides a stronger process/container boundary and can be configured with resource limits and restricted networking.\n\n```text\nWorkspace sandbox → protects the original working tree\nDocker sandbox    → stronger process/filesystem/network boundary\nHost execution    → controlled execution, not a security sandbox\n```\n\n## Safety model
 
 - subprocess execution uses `shell=False`
 - destructive commands are blocked by default
@@ -457,7 +506,7 @@ A source inspection can identify configuration and code-structure signals, but i
 
 RepoForge itself also deliberately distinguishes `VERIFIED` from universal correctness: passing discovered checks is evidence about the checks that ran, not proof that arbitrary software has zero defects.
 
-## Limitations
+## Real-world validation\n\nRepoForge's own regression suite is necessary but not sufficient to establish repository-agnostic behavior. External-target validation should exercise the complete engineering loop against repositories that were not authored specifically for RepoForge.\n\n```text\nexternal repository → baseline verification → RCA → bounded repair\n                                      ↓\n                         deterministic re-verification\n                                      ↓\n                              independent review\n                                      ↓\n                       rollback or repair evidence\n```\n\nAdaptiveRag-X is being used as an external validation target. Its results should be reported separately from RepoForge's own test-suite results; a successful experiment does not establish universal correctness.\n\n## Limitations
 
 No tool can truthfully guarantee that arbitrary software is permanently bug-free. RepoForge therefore reports evidence-backed states rather than inventing certainty. Browser-specific behavior, proprietary infrastructure, credentials, production deployment, and unsupported language ecosystems require an appropriate adapter and environment.
 
