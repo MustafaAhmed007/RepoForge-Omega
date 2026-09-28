@@ -112,9 +112,9 @@ def main() -> None:
                 {
                     "findings": result.findings,
                     "proposals": result.proposals,
-                    "patched": result.patched,
-                    "verification_status": result.verification_status,
-                    "readiness": asdict(result.readiness),
+                    "patched": goal_result.patched,
+                    "verification_status": goal_result.verification_status,
+                    "readiness": asdict(goal_result.readiness),
                     "rolled_back": result.rolled_back,
                 },
                 indent=2,
@@ -130,24 +130,24 @@ def main() -> None:
             max_goal_iterations=args.max_iterations,
             allow_dirty_files=args.allow_dirty_files,
         )
-        result = Orchestrator(config).run()
+        goal_result = Orchestrator(config).run()
         print(
             json.dumps(
                 {
                     "goal": "make any given repository deployment-ready",
-                    "goal_id": result.goal_id,
-                    "goal_status": result.goal_status,
-                    "verification_status": result.verification_status,
-                    "readiness": asdict(result.readiness),
-                    "iterations": result.iterations,
-                    "patched": result.patched,
-                    "blockers": result.blockers,
+                    "goal_id": goal_result.goal_id,
+                    "goal_status": goal_result.goal_status,
+                    "verification_status": goal_result.verification_status,
+                    "readiness": asdict(goal_result.readiness),
+                    "iterations": goal_result.iterations,
+                    "patched": goal_result.patched,
+                    "blockers": goal_result.blockers,
                     "goal_state": str(repo / ".repoforge" / "goal.json"),
                 },
                 indent=2,
             )
         )
-        raise SystemExit(0 if result.goal_status == "VERIFIED" else 1)
+        raise SystemExit(0 if goal_result.goal_status == "VERIFIED" else 1)
 
     if args.command == "rca":
         verification = RepoForge(repo).verify(args.timeout)
@@ -169,10 +169,10 @@ def main() -> None:
         return
 
     if args.command == "inspect":
-        verification = RepoForge(repo).verify(args.timeout) if args.verify else None
+        verification_for_inspect = RepoForge(repo).verify(args.timeout) if args.verify else None
         fp, findings, proposals = Pipeline(ForgeConfig.for_repo(repo)).inspect(
             Path(args.out),
-            verification=verification,
+            verification=verification_for_inspect,
         )
         print(
             json.dumps(
@@ -184,7 +184,7 @@ def main() -> None:
                 indent=2,
             )
         )
-        if args.verify and verification and verification.release_status.value != "VERIFIED":
+        if args.verify and verification_for_inspect and verification_for_inspect.release_status.value != "VERIFIED":
             raise SystemExit(1)
         return
 
