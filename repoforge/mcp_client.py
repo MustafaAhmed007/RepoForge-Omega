@@ -6,8 +6,8 @@ from typing import Any
 class MCPResponse:
     id:int;result:dict[str,Any]|None=None;error:dict[str,Any]|None=None
 class StdioMCPClient:
-    def __init__(self,command:list[str]):self.command=command;self._next_id=1
-    def call(self,method:str,params:dict[str,Any]|None=None,timeout:int=30):
+    def __init__(self, command: list[str]) -> None:self.command=command;self._next_id=1
+    def call(self, method: str, params: dict[str,Any] | None = None, timeout: int = 30) -> MCPResponse:
         i=self._next_id;self._next_id+=1
         payload=json.dumps({"jsonrpc":"2.0","id":i,"method":method,"params":params or {}})
         p=subprocess.run(self.command,input=payload+"\n",text=True,capture_output=True,timeout=timeout,shell=False)
