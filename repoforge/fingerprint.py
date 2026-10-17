@@ -106,11 +106,11 @@ def detect(repo: Path) -> RepositoryFingerprint:
                 "vite": "Vite",
                 "typescript": "TypeScript",
             }.items():
-                if key in deps:
+                if isinstance(deps.get(key), str):
                     frameworks.add(label)
-            if "build" in scripts:
+            if isinstance(scripts.get("build"), str):
                 builds.add("npm build")
-            if "test" in scripts:
+            if isinstance(scripts.get("test"), str):
                 tests.add("npm test")
         elif n in {"package-lock.json", "pnpm-lock.yaml", "yarn.lock"}:
             pkgs.add({"package-lock.json": "npm", "pnpm-lock.yaml": "pnpm", "yarn.lock": "Yarn"}[n])
