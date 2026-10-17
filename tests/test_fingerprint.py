@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from repoforge.fingerprint import detect
 
 
@@ -34,3 +36,92 @@ def test_ignores_repoforge_and_generated_artifacts(tmp_path: Path) -> None:
 
     assert fp.file_count == 1
     assert fp.total_bytes == len("print('ok')\n".encode("utf-8"))
+
+
+def test_detect_handles_malformed_package_json(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name": "broken", invalid json}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert fp.file_count == 1
+
+
+@pytest.mark.parametrize("package_json", ["null", "[]", '"text"', "42"])
+def test_detect_handles_non_object_package_json(tmp_path: Path, package_json: str) -> None:
+    (tmp_path / "package.json").write_text(package_json, encoding="utf-8")
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert fp.file_count == 1
+
+
+def test_detect_handles_invalid_utf8_package_json(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_bytes(b'{"name": "\xff"}')
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert fp.file_count == 1
+
+
+def test_detect_handles_invalid_package_metadata_fields(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": null, "devDependencies": [], "scripts": "invalid"}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert fp.file_count == 1
+
+
+def test_ignores_string_and_number_metadata_fields(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": "react", "devDependencies": 42, "scripts": "test"}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert "React" not in fp.frameworks
+    assert "npm build" not in fp.build_systems
+    assert "npm test" not in fp.test_systems
+
+
+def test_detect_ignores_non_string_dependency_and_script_values(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": {"react": null}, "scripts": {"test": 42, "build": null}}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert "React" not in fp.frameworks
+    assert "npm build" not in fp.build_systems
+    assert "npm test" not in fp.test_systems
+
+
+def test_detects_valid_package_metadata(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": {"react": "^18.0.0"}, '
+        '"devDependencies": {"vite": "^5.0.0"}, '
+        '"scripts": {"build": "vite build", "test": "vitest"}}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert "React" in fp.frameworks
+    assert "Vite" in fp.frameworks
+    assert "npm build" in fp.build_systems
+    assert "npm test" in fp.test_systems
+    assert fp.file_count == 1

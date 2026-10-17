@@ -84,10 +84,20 @@ def detect(repo: Path) -> RepositoryFingerprint:
             pkgs.add("Node.js")
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 data = {}
-            deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+            if not isinstance(data, dict):
+                data = {}
+            dependencies = data.get("dependencies", {})
+            dev_dependencies = data.get("devDependencies", {})
             scripts = data.get("scripts", {})
+            if not isinstance(dependencies, dict):
+                dependencies = {}
+            if not isinstance(dev_dependencies, dict):
+                dev_dependencies = {}
+            if not isinstance(scripts, dict):
+                scripts = {}
+            deps = {**dependencies, **dev_dependencies}
             for key, label in {
                 "next": "Next.js",
                 "react": "React",
@@ -96,11 +106,11 @@ def detect(repo: Path) -> RepositoryFingerprint:
                 "vite": "Vite",
                 "typescript": "TypeScript",
             }.items():
-                if key in deps:
+                if isinstance(deps.get(key), str):
                     frameworks.add(label)
-            if "build" in scripts:
+            if isinstance(scripts.get("build"), str):
                 builds.add("npm build")
-            if "test" in scripts:
+            if isinstance(scripts.get("test"), str):
                 tests.add("npm test")
         elif n in {"package-lock.json", "pnpm-lock.yaml", "yarn.lock"}:
             pkgs.add({"package-lock.json": "npm", "pnpm-lock.yaml": "pnpm", "yarn.lock": "Yarn"}[n])
