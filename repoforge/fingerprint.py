@@ -84,7 +84,7 @@ def detect(repo: Path) -> RepositoryFingerprint:
             pkgs.add("Node.js")
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 data = {}
             if not isinstance(data, dict):
                 data = {}
