@@ -60,6 +60,15 @@ def test_detect_handles_non_object_package_json(tmp_path: Path, package_json: st
     assert fp.file_count == 1
 
 
+def test_detect_handles_invalid_utf8_package_json(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_bytes(b'{"name": "\xff"}')
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert fp.file_count == 1
+
+
 def test_detect_handles_invalid_package_metadata_fields(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
         '{"dependencies": null, "devDependencies": [], "scripts": "invalid"}',
@@ -88,4 +97,3 @@ def test_detects_valid_package_metadata(tmp_path: Path) -> None:
     assert "npm build" in fp.build_systems
     assert "npm test" in fp.test_systems
     assert fp.file_count == 1
-
