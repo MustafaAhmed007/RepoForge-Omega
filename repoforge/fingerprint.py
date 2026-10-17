@@ -86,8 +86,18 @@ def detect(repo: Path) -> RepositoryFingerprint:
                 data = json.loads(p.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 data = {}
-            deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+            if not isinstance(data, dict):
+                data = {}
+            dependencies = data.get("dependencies", {})
+            dev_dependencies = data.get("devDependencies", {})
             scripts = data.get("scripts", {})
+            if not isinstance(dependencies, dict):
+                dependencies = {}
+            if not isinstance(dev_dependencies, dict):
+                dev_dependencies = {}
+            if not isinstance(scripts, dict):
+                scripts = {}
+            deps = {**dependencies, **dev_dependencies}
             for key, label in {
                 "next": "Next.js",
                 "react": "React",
