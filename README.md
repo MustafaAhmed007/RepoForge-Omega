@@ -641,3 +641,17 @@ Deterministic verification
 ```
 
 Autonomy expands what RepoForge can do; it does **not** weaken the evidence standard for `VERIFIED`.
+
+
+## Operational safety checklist
+
+Before accepting an automated repair, verify:
+
+- [ ] The working tree and target branch are identified.
+- [ ] Findings cite concrete files, commands, or test output.
+- [ ] The proposed patch is minimal and reviewable.
+- [ ] Tests and relevant static checks run after the patch.
+- [ ] Failed verification blocks a "verified" or "deployment-ready" claim.
+- [ ] Rollback instructions and the final change summary are recorded.
+
+**Rule:** A successful edit is not proof of a successful repair. Report the exact checks that passed, the checks that failed, and any checks that were not run.
