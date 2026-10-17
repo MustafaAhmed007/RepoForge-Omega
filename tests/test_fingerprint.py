@@ -81,6 +81,20 @@ def test_detect_handles_invalid_package_metadata_fields(tmp_path: Path) -> None:
     assert fp.file_count == 1
 
 
+def test_ignores_string_and_number_metadata_fields(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": "react", "devDependencies": 42, "scripts": "test"}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert "React" not in fp.frameworks
+    assert "npm build" not in fp.build_systems
+    assert "npm test" not in fp.test_systems
+
+
 def test_detects_valid_package_metadata(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
         '{"dependencies": {"react": "^18.0.0"}, '
