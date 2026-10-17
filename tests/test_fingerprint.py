@@ -34,3 +34,14 @@ def test_ignores_repoforge_and_generated_artifacts(tmp_path: Path) -> None:
 
     assert fp.file_count == 1
     assert fp.total_bytes == len("print('ok')\n".encode("utf-8"))
+def test_detect_handles_malformed_package_json(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name": "broken", invalid json}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert fp.file_count == 1
+    
