@@ -95,6 +95,20 @@ def test_ignores_string_and_number_metadata_fields(tmp_path: Path) -> None:
     assert "npm test" not in fp.test_systems
 
 
+def test_detect_ignores_non_string_dependency_and_script_values(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"dependencies": {"react": null}, "scripts": {"test": 42, "build": null}}',
+        encoding="utf-8",
+    )
+
+    fp = detect(tmp_path)
+
+    assert "Node.js" in fp.package_managers
+    assert "React" not in fp.frameworks
+    assert "npm build" not in fp.build_systems
+    assert "npm test" not in fp.test_systems
+
+
 def test_detects_valid_package_metadata(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
         '{"dependencies": {"react": "^18.0.0"}, '
